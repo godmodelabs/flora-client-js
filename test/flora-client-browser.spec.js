@@ -45,7 +45,7 @@ describe('Flora client', () => {
         it('should add id to path', () => {
             api.execute({ resource: 'user', id: 1337 });
             expect(requests[0].url).to.contain(`${url}/user/1337`);
-            expect(requests[0].url).to.not.contain('id=');  // querystring shouldn't contain id param
+            expect(requests[0].url).to.not.contain('id='); // querystring shouldn't contain id param
         });
 
         it('should treat action=retrieve as standard (and not transmit it)', () => {
@@ -60,15 +60,15 @@ describe('Flora client', () => {
         });
 
         Object.entries({
-            'string': 'id,address.city,comments(order=ts:desc)[id,body]',
+            string: 'id,address.city,comments(order=ts:desc)[id,body]',
             'array/object': [
                 'id',
                 'address.city',
-                {'comments(order=ts:desc)': ['id', 'body']}
+                { 'comments(order=ts:desc)': ['id', 'body'] }
             ]
         }).forEach(([type, select]) => {
             it(`should add select as ${type} parameter to querystring`, () => {
-                api.execute({resource: 'user', select});
+                api.execute({ resource: 'user', select });
                 expect(requests[0].url).to.contain('select=id%2Caddress.city%2Ccomments(order%3Dts%3Adesc)%5Bid%2Cbody%5D');
             });
         });
@@ -203,15 +203,15 @@ describe('Flora client', () => {
         describe('request id check', () => {
             const api = new FloraClient({ url: 'http://example.com/' });
             const invalidIds = {
-                /*'undefined': undefined,
-                'null': null,*/
-                'boolean': true,
-                'NaN': NaN,
-                'Infinity': Infinity
+                /* 'undefined': undefined,
+                'null': null, */
+                boolean: true,
+                NaN,
+                Infinity
             };
 
-            Object.keys(invalidIds).forEach(type => {
-                it(`should reject ${type} as request id`, done => {
+            Object.keys(invalidIds).forEach((type) => {
+                it(`should reject ${type} as request id`, (done) => {
                     const invalidId = invalidIds[type];
 
                     api.execute({ resource: 'user', id: invalidId })
@@ -234,15 +234,15 @@ describe('Flora client', () => {
             server.autoRespond = true;
             server.respondWith([
                 200,
-                { "Content-Type": "application/json" },
+                { 'Content-Type': 'application/json' },
                 '{"meta":{},"data":{},"cursor":{}}'
             ]);
         });
 
         afterEach(() => server.restore());
 
-        it('should call handler function if authentication option is enabled', done => {
-            const auth = floraReq => {
+        it('should call handler function if authentication option is enabled', (done) => {
+            const auth = (floraReq) => {
                 floraReq.httpHeaders.Authorization = 'Bearer __token__';
                 return Promise.resolve();
             };
@@ -258,14 +258,16 @@ describe('Flora client', () => {
                 .catch(done);
         });
 
-        it('should add access_token parameter', done => {
-            const auth = floraReq => {
+        it('should add access_token parameter', (done) => {
+            const auth = (floraReq) => {
                 floraReq.access_token = '__token__';
                 return Promise.resolve();
             };
 
             (new FloraClient({ url, auth }))
-                .execute({ resource: 'user', id: 1337, action: 'update', auth: true })
+                .execute({
+                    resource: 'user', id: 1337, action: 'update', auth: true
+                })
                 .then(() => {
                     expect(server.requests).to.have.length(1);
                     expect(server.requests[0]).to.have.property('url')
@@ -275,11 +277,11 @@ describe('Flora client', () => {
                 .catch(done);
         });
 
-        it('should reject request if auth handler is not set', done => {
+        it('should reject request if auth handler is not set', (done) => {
             (new FloraClient({ url }))
                 .execute({ resource: 'user', auth: true })
                 .then(() => done(new Error('Expected promise to reject')))
-                .catch(err => {
+                .catch((err) => {
                     expect(err).to.be.instanceOf(Error)
                         .and.to.have.property('message')
                         .and.to.contain('Auth requests require an auth handler');
@@ -287,7 +289,7 @@ describe('Flora client', () => {
                 });
         });
 
-        it('should not add auth option as request parameter', done => {
+        it('should not add auth option as request parameter', (done) => {
             (new FloraClient({ url, auth: sinon.stub().resolves() }))
                 .execute({ resource: 'user', auth: true })
                 .then(() => {
@@ -310,7 +312,7 @@ describe('Flora client', () => {
             server.restore();
         });
 
-        it('should be a promise', done => {
+        it('should be a promise', (done) => {
             server.respondWith([200, { 'Content-Type': 'application/json; charset=utf-8' }, '{}']);
             const response = api.execute({ resource: 'user' });
             expect(response).to.be.instanceof(Promise);
@@ -318,14 +320,14 @@ describe('Flora client', () => {
             setTimeout(done, 50);
         });
 
-        it('should resolve promise with response', done => {
+        it('should resolve promise with response', (done) => {
             const data = [{ id: 1337, firstname: 'John', lastname: 'Doe' }];
-            const serverResponse = JSON.stringify({ meta: {}, data: data });
+            const serverResponse = JSON.stringify({ meta: {}, data });
 
             server.respondWith([200, { 'Content-Type': 'application/json; charset=utf-8' }, serverResponse]);
 
             api.execute({ resource: 'user' })
-                .then(response => {
+                .then((response) => {
                     expect(response.data).to.eql(data);
                     done();
                 })
@@ -334,12 +336,12 @@ describe('Flora client', () => {
             server.respond();
         });
 
-        it('should reject promise if JSON cannot be parsed', done => {
-            server.respondWith([200, {'Content-Type': 'application/json; charset=utf-8'}, '["test": 123]']);
+        it('should reject promise if JSON cannot be parsed', (done) => {
+            server.respondWith([200, { 'Content-Type': 'application/json; charset=utf-8' }, '["test": 123]']);
 
             api.execute({ resource: 'user' })
                 .then(() => done(new Error('Expected promise to reject')))
-                .catch(err => {
+                .catch((err) => {
                     expect(err).to.be.instanceof(SyntaxError)
                         .with.property('message', 'Unexpected token : in JSON at position 7');
                     done();
@@ -348,12 +350,12 @@ describe('Flora client', () => {
             server.respond();
         });
 
-        it('should not try to parse JSON if content-type doesn\'t match', done => {
-            server.respondWith([500, {'Content-Type': 'text/html'}, 'Internal Server Error']);
+        it('should not try to parse JSON if content-type doesn\'t match', (done) => {
+            server.respondWith([500, { 'Content-Type': 'text/html' }, 'Internal Server Error']);
 
             api.execute({ resource: 'user' })
                 .then(() => done(new Error('Expected promise to reject')))
-                .catch(err => {
+                .catch((err) => {
                     expect(err).to.be.instanceOf(Error)
                         .with.property('message', 'Server Error: Internal Server Error');
                     done();
@@ -362,7 +364,7 @@ describe('Flora client', () => {
             server.respond();
         });
 
-        it('should add response to error object', done => {
+        it('should add response to error object', (done) => {
             const floraReq = {
                 resource: 'user',
                 action: 'lock',
@@ -379,35 +381,35 @@ describe('Flora client', () => {
                 }
             });
 
-            server.respondWith([400, {'Content-Type': 'application/json; charset=utf-8'}, serverResponse]);
+            server.respondWith([400, { 'Content-Type': 'application/json; charset=utf-8' }, serverResponse]);
 
             api.execute(floraReq)
                 .then(() => done(new Error('Expected promise to reject')))
-                .catch(err => {
+                .catch((err) => {
                     expect(err)
                         .to.have.property('response')
                         .and.to.eql({
-                        meta: {},
-                        data: null,
-                        error: {
-                            message: 'Account already locked',
-                            additional: {
-                                info: true
+                            meta: {},
+                            data: null,
+                            error: {
+                                message: 'Account already locked',
+                                additional: {
+                                    info: true
+                                }
                             }
-                        }
-                    });
+                        });
                     done();
                 });
 
             server.respond();
         });
 
-        it('should handle request errors', done => {
-            server.respondWith(xhr => xhr.error());
+        it('should handle request errors', (done) => {
+            server.respondWith((xhr) => xhr.error());
 
             api.execute({ resource: 'article' })
                 .then(() => done(new Error('Expected promise to reject')))
-                .catch(err => {
+                .catch((err) => {
                     expect(err).to.be.instanceOf(Error).with.property('message', 'Request failed');
                     done();
                 });
@@ -431,25 +433,25 @@ describe('Flora client', () => {
             xhr.restore();
         });
 
-        it('should use default timeout', done => {
+        it('should use default timeout', (done) => {
             api.execute({ resource: 'user' })
                 .then(() => done(timeoutError))
-                .catch(err => {
+                .catch((err) => {
                     expect(err).to.be.instanceOf(Error)
-                        .and.to.have.property('message', `Request timed out after 15000 milliseconds`);
+                        .and.to.have.property('message', 'Request timed out after 15000 milliseconds');
                     done();
                 });
 
             clock.tick(18000);
         });
 
-        it('should use custom timeout', done => {
+        it('should use custom timeout', (done) => {
             const timeout = 3000;
 
             (new FloraClient({ url, timeout }))
                 .execute({ resource: 'user' })
                 .then(() => done(timeoutError))
-                .catch(err => {
+                .catch((err) => {
                     expect(err).to.be.instanceOf(Error)
                         .and.to.have.property('message', `Request timed out after ${timeout} milliseconds`);
                     done();
@@ -460,10 +462,10 @@ describe('Flora client', () => {
     });
 
     describe('formats', () => {
-        it('should trigger an error on non-JSON formats', done => {
+        it('should trigger an error on non-JSON formats', (done) => {
             api.execute({ resource: 'user', format: 'pdf' })
                 .then(() => done(new Error('Expected promise to reject')))
-                .catch(err => {
+                .catch((err) => {
                     expect(err).to.be.instanceof(Error);
                     expect(err.message).to.equal('Only JSON format supported');
                     done();

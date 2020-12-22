@@ -6,8 +6,12 @@
   "browser": "dist/index.browser.js",
   "scripts": {
     "build": "webpack --mode=production --progress",
+<<<<<<< HEAD
     "lint": "eslint src/ build/",
     "lint-fix": "eslint --fix src/ build/",
+=======
+    "lint": "eslint --fix src/ build/",
+>>>>>>> 6ee0f00 (optimise stringify method and tests; run linter)
     "prepublishOnly": "npm run test && npm run build",
     "test:browser": "karma start --reporters mocha",
     "test:node": "mocha --reporter spec test/flora-client-node.spec.js test/stringify.spec.js",
