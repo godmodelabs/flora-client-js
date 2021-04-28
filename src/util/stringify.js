@@ -21,14 +21,9 @@ function stringify(spec) {
     if (typeof spec === 'object') {
         return entries(spec)
             .map(([key, value]) => {
-<<<<<<< HEAD
-                const hasMultipleSubItems = (Array.isArray(value) && value.length > 1) || (typeof value === 'object' && Object.entries(value).length > 1);
-=======
                 const hasMultipleSubItems = (Array.isArray(value) && value.length > 1)
                     || (Array.isArray(value) && value.map((_) => (typeof _ === 'object' ? entries(_).length : 1)).reduce((a, b) => a + b)) > 1
                     || (typeof value === 'object' && entries(value).length > 1);
->>>>>>> 6ee0f00 (optimise stringify method and tests; run linter)
-
                 value = stringify(value);
                 return key + (hasMultipleSubItems ? `[${value}]` : `.${value}`);
             })
