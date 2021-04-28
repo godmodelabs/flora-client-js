@@ -19,8 +19,7 @@ describe('Flora client', () => {
         });
 
         it('should define execute function', () => {
-            const api = new FloraClient({ url: 'http://example.com/' });
-            expect(api.execute).to.be.a('function');
+            expect(new FloraClient({ url: 'http://example.com/' }).execute).to.be.a('function');
         });
     });
 
@@ -176,7 +175,7 @@ describe('Flora client', () => {
                 api.execute({ resource: 'user', id: 1337, action: 'lock' });
 
                 expect(requests[0]).to.have.property('method', 'POST');
-                expect(requests[0].requestBody).to.be.undefined;
+                expect(requests[0].requestBody).equal(undefined);
                 expect(requests[0].requestHeaders).to.have.property('Content-Type')
                     .and.to.contain('application/x-www-form-urlencoded');
             });
@@ -201,7 +200,7 @@ describe('Flora client', () => {
         });
 
         describe('request id check', () => {
-            const api = new FloraClient({ url: 'http://example.com/' });
+            const reqIdApi = new FloraClient({ url: 'http://example.com/' });
             const invalidIds = {
                 /* 'undefined': undefined,
                 'null': null, */
@@ -214,7 +213,7 @@ describe('Flora client', () => {
                 it(`should reject ${type} as request id`, (done) => {
                     const invalidId = invalidIds[type];
 
-                    api.execute({ resource: 'user', id: invalidId })
+                    reqIdApi.execute({ resource: 'user', id: invalidId })
                         .then(() => done(new Error('Expected promise to reject')))
                         .catch((err) => {
                             expect(err).to.be.instanceof(Error)

@@ -23,8 +23,7 @@ describe('Flora node client', () => {
         });
 
         it('should define execute function', () => {
-            const api = new FloraClient({ url: 'http://example.com/' });
-            expect(api.execute).to.be.a('function');
+            expect(new FloraClient({ url: 'http://example.com/' }).execute).to.be.a('function');
         });
     });
 
@@ -308,7 +307,7 @@ describe('Flora node client', () => {
         });
 
         describe('request id', () => {
-            const api = new FloraClient({ url: 'http://example.com/' });
+            const reqIdApi = new FloraClient({ url: 'http://example.com/' });
             const invalidIds = {
                 /* 'undefined': undefined,
                 'null': null, */
@@ -321,7 +320,7 @@ describe('Flora node client', () => {
                 it(`should reject ${type} as request id`, (done) => {
                     const invalidId = invalidIds[type];
 
-                    api.execute({ resource: 'user', id: invalidId })
+                    reqIdApi.execute({ resource: 'user', id: invalidId })
                         .then(() => done(new Error('Expected promise to reject')))
                         .catch((err) => {
                             expect(err).to.be.instanceof(Error)
@@ -581,7 +580,8 @@ describe('Flora node client', () => {
     });
 
     it('should return API error on connection issues', (done) => {
-        // nock can't fake request errors at the moment, so we have to make a real request to nonexistent host
+        // nock can't fake request errors at the moment, so we have to make
+        // a real request to nonexistent host
         const nonExistentApi = new FloraClient({ url: 'http://non-existent.api.localhost' });
 
         nock.enableNetConnect();

@@ -6,8 +6,8 @@
   "browser": "dist/index.browser.js",
   "scripts": {
     "build": "webpack --mode=production --progress",
-    "lint": "eslint src/ build/",
-    "lint-fix": "eslint --fix src/ build/",
+    "lint": "eslint src/ build/ test/",
+    "lint-fix": "eslint --fix src/ build/ test/",
     "prepublishOnly": "npm run test && npm run build",
     "test:browser": "karma start --reporters mocha",
     "test:node": "mocha --reporter spec test/flora-client-node.spec.js test/stringify.spec.js",
