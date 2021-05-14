@@ -183,6 +183,31 @@ describe('Flora node client', () => {
                 .catch(done);
         });
 
+        it('should set a proper Content-Length when POSTing Unicode characters', (done) => {
+            const floraReq = {
+                resource: 'article',
+                action: 'create',
+                data: {
+                    title: 'this is a non-breaking space: ',
+                    author: { id: 1337 }
+                }
+            };
+
+            req = nock(url, {
+                reqheaders: {
+                    'content-type': 'application/json',
+                    'content-length': 64
+                }
+            })
+                .post('/article/', '{"title":"this is a non-breaking space: ","author":{"id":1337}}')
+                .query({ action: 'create' })
+                .reply(200, response, { 'Content-Type': 'application/json; charset=utf-8' });
+
+            api.execute(floraReq)
+                .then(() => done())
+                .catch(done);
+        });
+
         describe('HTTP method', () => {
             it('should use GET for "retrieve" actions', (done) => {
                 req = nock(url)
