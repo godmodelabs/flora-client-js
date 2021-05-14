@@ -24,7 +24,7 @@ class Node {
 
         if (jsonData) postBody = jsonData;
         if (params && method === 'POST') postBody = querystringify(params);
-        if (postBody) headers['Content-Length'] = postBody.length;
+        if (postBody) headers['Content-Length'] = Buffer.from(postBody).byteLength;
 
         return new Promise((resolve, reject) => {
             const req = (url.indexOf('https:') === 0 ? https : http).request(url, { method, headers }, (res) => {
