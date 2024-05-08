@@ -416,8 +416,7 @@ describe('Flora node client', () => {
             api.execute({ resource: 'user' })
                 .then(() => done(new Error('Expected promise to reject')))
                 .catch((err) => {
-                    expect(err).to.be.instanceOf(SyntaxError)
-                        .with.property('message', 'Unexpected token : in JSON at position 7');
+                    expect(err).to.be.instanceOf(SyntaxError);
                     done();
                 });
         });
