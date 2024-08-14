@@ -1,3 +1,2 @@
-'use strict';
-
-module.exports = (obj) => JSON.stringify(obj) === '{}';
+const isempty = (obj) => JSON.stringify(obj) === '{}';
+export default isempty;

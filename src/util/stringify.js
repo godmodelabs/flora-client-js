@@ -1,5 +1,3 @@
-'use strict';
-
 const entries = Object.entries
     ? Object.entries
     : (obj) => { // IE11 fallback
@@ -34,4 +32,4 @@ function stringify(spec) {
     return spec;
 }
 
-module.exports = stringify;
+export default stringify;

@@ -1,12 +1,12 @@
-'use strict';
+import isEmpty from './util/isempty.js';
+import querystringify from './util/querystringify.js';
+import httpmethod from './util/httpmethod.js';
+import isValidRequestId from './util/valid-request-id.js';
+import stringify from './util/stringify.js';
 
-const has = require('has');
-
-const isEmpty = require('./util/isempty');
-const querystringify = require('./util/querystringify');
-const httpmethod = require('./util/httpmethod');
-const isValidRequestId = require('./util/valid-request-id');
-const stringify = require('./util/stringify');
+function hasOwn(obj, key) {
+    return Object.prototype.hasOwnProperty.call(obj, key);
+}
 
 class Client {
     /**
@@ -38,7 +38,7 @@ class Client {
 
         if (options.defaultParams && !isEmpty(options.defaultParams)) {
             this.defaultParams = Object.keys(options.defaultParams)
-                .filter((key) => has(options.defaultParams, key))
+                .filter((key) => hasOwn(options.defaultParams, key))
                 .reduce((acc, key) => {
                     acc[key] = options.defaultParams[key];
                     return acc;
@@ -81,7 +81,7 @@ class Client {
      * @return {Promise}
      */
     execute(request) {
-        if (has(request, 'id') && !isValidRequestId(request.id)) {
+        if (hasOwn(request, 'id') && !isValidRequestId(request.id)) {
             return Promise.reject(new Error('Request id must be of type number or string'));
         }
 
@@ -91,14 +91,14 @@ class Client {
             }
 
             request.httpHeaders = request.httpHeaders || {};
-            return this.auth(request).then(() => this._execute(request));
+            return this.auth(request).then((authenticatedRequest) => this._execute(authenticatedRequest));
         }
 
         return this._execute(request);
     }
 
     _execute(request) {
-        const skipCache = has(request, 'cache') && !!request.cache === false;
+        const skipCache = hasOwn(request, 'cache') && !!request.cache === false;
         const opts = {
             resource: request.resource,
             id: request.id,
@@ -121,7 +121,7 @@ class Client {
         }
 
         opts.params = Object.keys(request)
-            .filter((key) => has(request, key))
+            .filter((key) => hasOwn(request, key))
             .filter((key) => ['resource', 'id', 'cache', 'data', 'auth', 'httpMethod', 'httpHeaders'].indexOf(key) === -1)
             .reduce((acc, key) => {
                 acc[key] = request[key];
@@ -130,7 +130,7 @@ class Client {
 
         if (this.defaultParams) {
             opts.params = Object.keys(this.defaultParams)
-                .filter((key) => !has(opts.params, key))
+                .filter((key) => !hasOwn(opts.params, key))
                 .reduce((acc, key) => {
                     acc[key] = this.defaultParams[key];
                     return acc;
@@ -138,7 +138,7 @@ class Client {
         }
 
         if (opts.params.action && opts.params.action === 'retrieve') delete opts.params.action;
-        const httpMethod = !has(request, 'httpMethod') ? httpmethod(opts) : request.httpMethod;
+        const httpMethod = !hasOwn(request, 'httpMethod') ? httpmethod(opts) : request.httpMethod;
         if (httpMethod === 'POST' && !opts.jsonData) opts.headers['Content-Type'] = 'application/x-www-form-urlencoded';
 
         if (this.forceGetParams.length) {
@@ -153,7 +153,7 @@ class Client {
 
         if (typeof opts.params === 'object' && !isEmpty(opts.params) && (opts.jsonData || httpMethod === 'GET')) {
             getParams = Object.keys(opts.params)
-                .filter((key) => has(opts.params, key))
+                .filter((key) => hasOwn(opts.params, key))
                 .reduce((acc, key) => {
                     acc[key] = opts.params[key];
                     return acc;
@@ -171,4 +171,4 @@ class Client {
     }
 }
 
-module.exports = Client;
+export default Client;

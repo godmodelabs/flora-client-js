@@ -1,9 +1,6 @@
-'use strict';
+import querystringify from './querystringify.js';
 
-const has = require('has');
-const querystringify = require('./querystringify');
-
-module.exports = (opts) => {
+const httpmethod = (opts) => {
     const { params } = opts;
 
     if (params) {
@@ -11,7 +8,9 @@ module.exports = (opts) => {
         if (action && action !== 'retrieve') return 'POST';
         if (querystringify(params).length > 2000) return 'POST';
     }
-    if (has(opts, 'jsonData')) return 'POST';
+    if (Object.prototype.hasOwnProperty.call(opts, 'jsonData')) return 'POST';
 
     return 'GET';
 };
+
+export default httpmethod;

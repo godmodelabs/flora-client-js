@@ -1,10 +1,8 @@
-'use strict';
+import http from 'node:http';
+import https from 'node:https';
+import path from 'node:path';
 
-const http = require('http');
-const https = require('https');
-const path = require('path');
-
-const querystringify = require('../util/querystringify');
+import querystringify from '../util/querystringify.js';
 
 class Node {
     /**
@@ -78,4 +76,4 @@ class Node {
     }
 }
 
-module.exports = Node;
+export default Node;

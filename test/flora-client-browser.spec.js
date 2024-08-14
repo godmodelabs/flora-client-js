@@ -1,476 +1,473 @@
-'use strict';
+import { expect, test } from '@playwright/test';
+import http from 'node:http';
 
-const { expect } = require('chai');
-const sinon = require('sinon');
+let httpServer;
 
-const FloraClient = require('../build/browser');
+// Webkit doesn't trigger timeouts for intercepted requests
+async function startHttpServer() {
+    const server = http.createServer((req, res) => {
+        const url = URL.parse(req.url, 'http://localhost');
 
-describe('Flora client', () => {
-    const url = 'http://api.example.com';
-    let api;
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization');
 
-    beforeEach(() => {
-        api = new FloraClient({ url });
+        if (req.method === 'OPTIONS') {
+            res.statusCode = 204;
+            return res.end();
+        }
+
+        if (url.pathname === '/') {
+            res.setHeader('Content-Type', 'text/html');
+            res.end('<!doctype html><html lang="en"><head><meta charset="UTF-8"><title>test</title></head><body></body></html>');
+            return;
+        }
+
+        const data = JSON.stringify({ data: [] });
+        if (url.pathname.startsWith('/timeout')) {
+            const delay = parseInt(url.searchParams.get('delay'), 10);
+            setTimeout(() => {
+                res.setHeader('Content-Type', 'application/json');
+                res.end(data);
+            }, delay || 500);
+            return;
+        }
+
+        res.setHeader('Content-Type', 'application/json');
+        return res.end(data);
     });
 
-    describe('interface', () => {
-        it('should require url on initialization', () => {
-            expect(() => new FloraClient({})).to.throw(Error, 'Flora API url must be set');
-        });
+    await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
 
-        it('should define execute function', () => {
-            expect(new FloraClient({ url: 'http://example.com/' }).execute).to.be.a('function');
+    const address = server.address();
+    const port = address?.port ?? 0;
+    const url = `http://127.0.0.1:${port}`;
+
+    return {
+        url,
+        close: () => new Promise((resolve) => server.close(() => resolve())),
+    };
+}
+
+async function runRequestTest(page, { ctorArgs = {}, executeArgs, response = { json: { data: [] } } }) {
+    const apiUrl = page.url() + 'api/';
+    const interceptPromise = new Promise((resolve, reject) => {
+        const match = apiUrl + 'article/**';
+
+        page.route(match, async (route) => {
+            try {
+                const request = route.request();
+                await route.fulfill(response);
+                resolve(request);
+            } catch (err) {
+                reject(err);
+            } finally {
+                await page.unroute(match);
+            }
         });
     });
+    const callPromise = page.evaluate(
+        ([ctorArgs, apiUrl, args]) => {
+            const client = new window.FloraClient({
+                url: apiUrl,
+                ...ctorArgs,
+                ...(typeof window['authFn'] === 'function' ? { auth: window['authFn'] } : null),
+            });
+            return client.execute(args);
+        },
+        [ctorArgs, apiUrl, executeArgs],
+    );
 
-    describe('request', () => {
-        let requests;
-        let xhr;
+    const [request, result] = await Promise.all([interceptPromise, callPromise]);
+    return { request, result };
+}
 
-        beforeEach(() => {
-            requests = [];
-            xhr = sinon.useFakeXMLHttpRequest();
-            xhr.onCreate = (req) => requests.push(req);
+test.beforeAll(async () => {
+    httpServer = await startHttpServer();
+});
+test.afterAll(async () => httpServer?.close());
+
+test.beforeEach(async ({ page }) => {
+    await page.goto(httpServer.url);
+    await page.addScriptTag({ path: 'dist/flora-client.umd.js' });
+
+    // TODO: activate for local development only
+    /*
+    page.on('console', (m) => console.log('[console]', m.type(), m.text()));
+    page.on('pageerror', (e) => console.error('[pageerror]', e));
+    page.on('requestfailed', (r) => console.log('failed', r.url(), r.failure()?.errorText));
+*/
+});
+
+test.describe('FloraClient', () => {
+    test('loading', async ({ page }) => {
+        const isLoaded = await page.evaluate(() => typeof window.FloraClient === 'function');
+        expect(isLoaded).toBe(true);
+    });
+
+    test.describe('requests', () => {
+        test('add resource to path', async ({ page }) => {
+            const { request } = await runRequestTest(page, {
+                executeArgs: { resource: 'article' },
+            });
+
+            const url = new URL(request.url());
+            expect(url.pathname).toEqual('/api/article/');
         });
 
-        afterEach(() => xhr.restore());
+        test.describe('ids', () => {
+            Object.entries({
+                number: 1337,
+                string: 'abc',
+            }).forEach(([type, id]) =>
+                test(`add id (${type}) to path`, async ({ page }) => {
+                    const { request } = await runRequestTest(page, {
+                        executeArgs: { resource: 'article', id },
+                    });
 
-        it('should add resource to path', () => {
-            api.execute({ resource: 'user' });
-            expect(requests[0].url).to.contain(`${url}/user/`);
-            expect(requests[0].url).to.not.contain('resource='); // querystring shouldn't contain resource param
+                    const url = new URL(request.url());
+                    expect(url.pathname).toEqual(`/api/article/${id}`);
+                }),
+            );
+
+            [true, false, NaN, Infinity, undefined].forEach((id) =>
+                test(`reject id (${id})`, async ({ page }) => {
+                    const call = page.evaluate((id) => {
+                        const client = new window.FloraClient({ url: 'https://api.example.com/' });
+                        return client.execute({ resource: 'article', id });
+                    }, id);
+
+                    await expect(call).rejects.toThrow('Request id must be of type number or string');
+                }),
+            );
         });
 
-        it('should add id to path', () => {
-            api.execute({ resource: 'user', id: 1337 });
-            expect(requests[0].url).to.contain(`${url}/user/1337`);
-            expect(requests[0].url).to.not.contain('id='); // querystring shouldn't contain id param
-        });
+        test.describe('actions', () => {
+            test('should not add default action "retrieve" as parameter', async ({ page }) => {
+                const { request } = await runRequestTest(page, {
+                    executeArgs: { resource: 'article' },
+                });
 
-        it('should treat action=retrieve as standard (and not transmit it)', () => {
-            api.execute({ resource: 'user', action: 'retrieve' });
-            expect(requests[0].url).not.to.contain('action=retrieve');
-        });
+                const url = new URL(request.url());
+                expect(url.searchParams.has('action')).toBe(false);
+            });
 
-        it('should add action parameter', () => {
-            api.execute({ resource: 'user', id: 1337, action: 'awesome' });
-            expect(requests[0]).to.have.property('url')
-                .and.to.contain('action=awesome');
-        });
+            test('should add action as parameter', async ({ page }) => {
+                const { request } = await runRequestTest(page, {
+                    executeArgs: { resource: 'article', action: 'count', id: 1337 },
+                });
 
-        Object.entries({
-            string: 'id,address.city,comments(order=ts:desc)[id,body]',
-            'array/object': [
-                'id',
-                'address.city',
-                { 'comments(order=ts:desc)': ['id', 'body'] }
-            ]
-        }).forEach(([type, select]) => {
-            it(`should add select as ${type} parameter to querystring`, () => {
-                api.execute({ resource: 'user', select });
-                expect(requests[0].url).to.contain('select=id%2Caddress.city%2Ccomments(order%3Dts%3Adesc)%5Bid%2Cbody%5D');
+                const url = new URL(request.url());
+                expect(url.searchParams.has('action')).toBe(true);
+                expect(url.searchParams.get('action')).toEqual('count');
+            });
+
+            Object.entries({
+                'should use GET requests if action is not set': { resource: 'article' },
+                'should use GET requests for "retrieve" action': { resource: 'article', action: 'retrieve' },
+            }).forEach(([description, executeArgs]) =>
+                test(description, async ({ page }) => {
+                    const { request } = await runRequestTest(page, {
+                        executeArgs,
+                    });
+
+                    expect(request.method()).toEqual('GET');
+                }),
+            );
+
+            test('should use POST requests for other actions than "retrieve"', async ({ page }) => {
+                const { request } = await runRequestTest(page, {
+                    executeArgs: { resource: 'article', action: 'count', id: 1337 },
+                });
+
+                const headers = request.headers();
+
+                expect(request.method()).toEqual('POST');
+                expect(request.postData()).toBeNull();
+                expect(headers).toHaveProperty('content-type');
+                expect(headers['content-type']).toEqual('application/x-www-form-urlencoded');
             });
         });
 
-        it('should add filter parameter to querystring', () => {
-            api.execute({ resource: 'user', filter: 'address[country.iso2=DE AND city=Munich]' });
-            expect(requests[0].url).to.contain('filter=address%5Bcountry.iso2%3DDE%20AND%20city%3DMunich%5D');
+        Object.entries({
+            'should add select (string) as parameter': { resource: 'article', select: 'id,title,date' },
+            'should add select (array/object) parameter to querystring': {
+                resource: 'article',
+                select: ['id', 'title', 'date'],
+            },
+        }).forEach(([description, executeArgs]) =>
+            test(description, async ({ page }) => {
+                const { request } = await runRequestTest(page, {
+                    executeArgs,
+                });
+
+                const url = new URL(request.url());
+                expect(url.searchParams.has('select')).toBe(true);
+                expect(url.searchParams.get('select')).toEqual('id,title,date');
+            }),
+        );
+
+        test('should add filter parameter to querystring', async ({ page }) => {
+            const { request } = await runRequestTest(page, {
+                executeArgs: { resource: 'article', filter: 'id=1,3,5' },
+            });
+
+            const url = new URL(request.url());
+            expect(url.searchParams.has('filter')).toBe(true);
+            expect(url.searchParams.get('filter')).toEqual('id=1,3,5');
         });
 
         Object.entries({
             'should add non-falsy limit parameter to querystring': 15,
-            'should add falsy limit parameter to query': 0,
-        }).forEach(([description, limit]) => {
-            it(description, () => {
-                api.execute({ resource: 'user', limit });
-                expect(requests[0].url).to.contain(`limit=${limit}`);
-            });
-        });
+            'should add falsy limit parameter to querystring': 0,
+        }).forEach(([description, limit]) =>
+            test(description, async ({ page }) => {
+                const { request } = await runRequestTest(page, {
+                    executeArgs: { resource: 'article', limit },
+                });
 
-        it('should add page parameter to querystring', () => {
-            api.execute({ resource: 'user', page: 2 });
-            expect(requests[0].url).to.contain('page=2');
-        });
+                const url = new URL(request.url());
+                expect(url.searchParams.has('limit')).toBe(true);
+                expect(url.searchParams.get('limit')).toEqual(String(limit));
+            }),
+        );
 
-        it('should add search parameter to querystring', () => {
-            api.execute({ resource: 'user', search: 'full text search' });
-            expect(requests[0].url).to.contain('search=full%20text%20search');
-        });
-
-        it('should add cache breaker to querystring', () => {
-            api.execute({ resource: 'user', cache: false });
-            expect(requests[0].url).to.match(/_=\d+/);
-            expect(requests[0].url).to.not.contain('cache=');
-        });
-
-        it('should post content in data key as JSON', () => {
-            api.execute({
-                resource: 'article',
-                action: 'create',
-                data: {
-                    title: 'Lorem Ipsum',
-                    author: { id: 1337 }
-                }
+        test('should add page parameter to querystring', async ({ page }) => {
+            const { request } = await runRequestTest(page, {
+                executeArgs: { resource: 'article', page: 15 },
             });
 
-            const request = requests[0];
-            expect(request.method).to.equal('POST');
-            expect(request.url).to.contain('action=create');
-            expect(request.requestHeaders).to.have.property('Content-Type', 'application/json;charset=utf-8');
-            expect(request.requestBody).to.equal('{"title":"Lorem Ipsum","author":{"id":1337}}');
+            const url = new URL(request.url());
+            expect(url.searchParams.has('page')).toBe(true);
+            expect(url.searchParams.get('page')).toEqual('15');
         });
 
-        it('should not add httpHeaders option to request params', () => {
-            api.execute({ resource: 'user', httpHeaders: { 'X-Awesome': 'test' } });
-            expect(requests[0]).to.have.property('url')
-                .and.not.to.contain('httpHeaders=');
+        test('should add search parameter to querystring', async ({ page }) => {
+            const { request } = await runRequestTest(page, {
+                executeArgs: { resource: 'article', search: 'some fancy search string' },
+            });
+
+            const url = new URL(request.url());
+            expect(url.searchParams.has('search')).toBe(true);
+            expect(url.searchParams.get('search')).toEqual('some fancy search string');
         });
 
-        describe('parameters', () => {
-            it('should support defaults', () => {
-                (new FloraClient({ url, defaultParams: { param: 'abc' } }))
-                    .execute({ resource: 'user', id: 1337 });
-
-                expect(requests[0].url).to.contain('/user/1337?param=abc');
+        test('should add cache breaker to querystring', async ({ page }) => {
+            const { request } = await runRequestTest(page, {
+                executeArgs: { resource: 'article', cache: false },
             });
 
-            it('should use request parameter if default exists with same name', () => {
-                (new FloraClient({ url, defaultParams: { param: 'abc' } }))
-                    .execute({ resource: 'user', id: 1337, param: 'xyz' });
+            const url = new URL(request.url());
+            expect(url.searchParams.has('_')).toBe(true);
+            expect(url.searchParams.get('_')).toMatch(/^\d+$/);
+        });
 
-                expect(requests[0].url).to.contain('/user/1337?param=xyz');
+        test('should post content in data key as JSON', async ({ page }) => {
+            const { request } = await runRequestTest(page, {
+                executeArgs: {
+                    resource: 'article',
+                    action: 'create',
+                    data: {
+                        title: 'Lorem Ipsum',
+                        author: { id: 1337 },
+                    },
+                },
             });
 
-            it('should send selected parameters as part of the querystring', () => {
-                (new FloraClient({ url, forceGetParams: ['foobar'] }))
-                    .execute({
+            const headers = request.headers();
+
+            expect(request.method()).toEqual('POST');
+            expect(headers).toHaveProperty('content-type');
+            expect(headers['content-type'].toLowerCase()).toEqual('application/json; charset=utf-8');
+            expect(request.postData()).toEqual('{"title":"Lorem Ipsum","author":{"id":1337}}');
+        });
+
+        test('should add default parameter(s)', async ({ page }) => {
+            const { request } = await runRequestTest(page, {
+                ctorArgs: { defaultParams: { client_id: 'test' } },
+                executeArgs: { resource: 'article' },
+            });
+
+            const url = new URL(request.url());
+            expect(url.searchParams.has('client_id')).toEqual(true);
+            expect(url.searchParams.get('client_id')).toEqual('test');
+        });
+
+        test('should overwrite default parameter with request parameter', async ({ page }) => {
+            const { request } = await runRequestTest(page, {
+                ctorArgs: { defaultParams: { foo: 'test' } },
+                executeArgs: { resource: 'article', foo: 'bar' },
+            });
+
+            const url = new URL(request.url());
+            expect(url.searchParams.has('foo')).toEqual(true);
+            expect(url.searchParams.get('foo')).toEqual('bar');
+        });
+
+        test('should send selected parameters in querystring', async ({ page }) => {
+            const { request } = await runRequestTest(page, {
+                ctorArgs: { forceGetParams: ['foobar'] },
+                executeArgs: {
+                    resource: 'article',
+                    action: 'create',
+                    data: {
+                        title: 'Lorem Ipsum',
+                        author: { id: 1337 },
+                    },
+                    foobar: 1,
+                },
+            });
+
+            const url = new URL(request.url());
+            expect(url.searchParams.has('foobar')).toEqual(true);
+            expect(url.searchParams.get('foobar')).toEqual('1');
+        });
+
+        test.describe('HTTP methods', () => {
+            test('should overwrite HTTP method with parameter', async ({ page }) => {
+                const { request } = await runRequestTest(page, {
+                    executeArgs: { resource: 'article', action: 'update', data: { title: 'Updated title' }, httpMethod: 'PATCH' },
+                });
+
+                const url = new URL(request.url());
+
+                expect(request.method()).toEqual('PATCH');
+                expect(url.searchParams.get('action')).toEqual('update');
+                expect(url.searchParams.has('httpMethod')).toBe(false);
+            });
+
+            test('should switch to POST if querystring is too large', async ({ page }) => {
+                const { request } = await runRequestTest(page, {
+                    executeArgs: {
                         resource: 'article',
-                        action: 'create',
-                        data: {
-                            title: 'Lorem Ipsum',
-                            author: { id: 1337 }
-                        },
-                        foobar: 1
-                    });
-
-                const request = requests[0];
-                expect(request.url).to.contain('foobar=1');
-                expect(request.requestBody).to.equal('{"title":"Lorem Ipsum","author":{"id":1337}}');
-            });
-        });
-
-        describe('HTTP method', () => {
-            it('should use GET for "retrieve" actions', () => {
-                api.execute({ resource: 'user', id: 1337, action: 'retrieve' });
-                expect(requests[0].method).to.equal('GET');
-            });
-
-            it('should use GET if action is not set', () => {
-                api.execute({ resource: 'user', id: 1337 });
-                expect(requests[0].method).to.equal('GET');
-            });
-
-            it('should use POST for other actions than "retrieve"', () => {
-                api.execute({ resource: 'user', id: 1337, action: 'lock' });
-
-                expect(requests[0]).to.have.property('method', 'POST');
-                expect(requests[0].requestBody).equal(undefined);
-                expect(requests[0].requestHeaders).to.have.property('Content-Type')
-                    .and.to.contain('application/x-www-form-urlencoded');
-            });
-
-            it('should explicitly overwrite method by parameter', () => {
-                api.execute({ resource: 'user', action: 'search', httpMethod: 'HEAD' });
-
-                expect(requests[0].method).to.equal('HEAD');
-                expect(requests[0].url).to.contain('action=search')
-                    .and.to.not.contain('httpMethod=');
-            });
-
-            it('should switch to POST if querystring gets too large', () => {
-                api.execute({
-                    resource: 'user',
-                    select: 'select'.repeat(150),
-                    filter: 'filter'.repeat(150),
-                    search: 'search term'.repeat(150),
-                    limit: 100,
-                    page: 10
+                        select: 'select'.repeat(150),
+                        filter: 'filter'.repeat(150),
+                        search: 'search term'.repeat(150),
+                        limit: 100,
+                        page: 10,
+                    },
                 });
 
-                expect(requests[0].method).to.equal('POST');
+                const url = new URL(request.url());
+                expect(request.method()).toEqual('POST');
+                expect(url.pathname).toEqual('/api/article/');
+
+                const headers = request.headers();
+                expect(headers).toHaveProperty('content-type');
+                expect(headers['content-type']).toEqual('application/x-www-form-urlencoded');
+
+                const searchParams = new URLSearchParams(request.postData());
+                expect(searchParams.has('select')).toBeTruthy();
+                expect(searchParams.has('filter')).toBeTruthy();
+                expect(searchParams.has('search')).toBeTruthy();
+                expect(searchParams.get('limit')).toEqual('100');
+                expect(searchParams.get('page')).toEqual('10');
             });
         });
 
-        describe('request id check', () => {
-            const reqIdApi = new FloraClient({ url: 'http://example.com/' });
-            const invalidIds = {
-                /* 'undefined': undefined,
-                'null': null, */
-                boolean: true,
-                NaN,
-                Infinity
-            };
-
-            Object.keys(invalidIds).forEach((type) => {
-                it(`should reject ${type} as request id`, (done) => {
-                    const invalidId = invalidIds[type];
-
-                    reqIdApi.execute({ resource: 'user', id: invalidId })
-                        .then(() => done(new Error('Expected promise to reject')))
-                        .catch((err) => {
-                            expect(err).to.be.instanceof(Error)
-                                .and.to.have.property('message', 'Request id must be of type number or string');
-                            done();
-                        });
+        test.describe('auth handler', () => {
+            test('reject on missing auth handler', async ({ page }) => {
+                const call = page.evaluate(() => {
+                    const client = new window.FloraClient({ url: 'https://api.example.com/' });
+                    return client.execute({ resource: 'article', auth: true });
                 });
+
+                await expect(call).rejects.toThrow('Auth requests require an auth handler');
+            });
+
+            test('should use configured auth handler', async ({ page }) => {
+                // functions cannot be serialized in page.evaluate method
+                // add global function as workaround
+                await page.exposeFunction('authFn', async (floraReq) => {
+                    floraReq.httpHeaders.Authorization = 'Bearer __token__';
+                    return Promise.resolve(floraReq);
+                });
+                const { request } = await runRequestTest(page, {
+                    executeArgs: { resource: 'article', filter: 'isPremium=true', auth: true },
+                });
+
+                const url = new URL(request.url());
+                expect(url.searchParams.has('auth')).toBe(false);
+
+                const headers = request.headers();
+                expect(headers).toHaveProperty('authorization');
+                expect(headers['authorization']).toEqual('Bearer __token__');
             });
         });
-    });
 
-    describe('auth', () => {
-        let server;
+        test('HTTP (default) headers', async ({ page }) => {
+            const { request } = await runRequestTest(page, {
+                executeArgs: { resource: 'article', httpHeaders: { 'X-Foo': 'bar' } },
+            });
 
-        beforeEach(() => {
-            server = sinon.createFakeServer();
-            server.autoRespond = true;
-            server.respondWith([
-                200,
-                { 'Content-Type': 'application/json' },
-                '{"meta":{},"data":{},"cursor":{}}'
-            ]);
+            const headers = request.headers();
+            expect(headers).toHaveProperty('x-foo');
+            expect(headers['x-foo']).toEqual('bar');
         });
 
-        afterEach(() => server.restore());
-
-        it('should call handler function if authentication option is enabled', (done) => {
-            const auth = (floraReq) => {
-                floraReq.httpHeaders.Authorization = 'Bearer __token__';
-                return Promise.resolve();
-            };
-
-            (new FloraClient({ url, auth }))
-                .execute({ resource: 'user', auth: true })
-                .then(() => {
-                    expect(server.requests).to.have.length(1);
-                    expect(server.requests[0]).to.have.property('requestHeaders')
-                        .and.to.have.property('Authorization', 'Bearer __token__');
-                    done();
-                })
-                .catch(done);
-        });
-
-        it('should add access_token parameter', (done) => {
-            const auth = (floraReq) => {
-                floraReq.access_token = '__token__';
-                return Promise.resolve();
-            };
-
-            (new FloraClient({ url, auth }))
-                .execute({
-                    resource: 'user', id: 1337, action: 'update', auth: true
-                })
-                .then(() => {
-                    expect(server.requests).to.have.length(1);
-                    expect(server.requests[0]).to.have.property('url')
-                        .and.to.contain('access_token=__token__')
-                        .and.to.not.contain('auth=');
-                    done();
-                })
-                .catch(done);
-        });
-
-        it('should reject request if auth handler is not set', (done) => {
-            (new FloraClient({ url }))
-                .execute({ resource: 'user', auth: true })
-                .then(() => done(new Error('Expected promise to reject')))
-                .catch((err) => {
-                    expect(err).to.be.instanceOf(Error)
-                        .and.to.have.property('message')
-                        .and.to.contain('Auth requests require an auth handler');
-                    done();
-                });
-        });
-
-        it('should not add auth option as request parameter', (done) => {
-            (new FloraClient({ url, auth: sinon.stub().resolves() }))
-                .execute({ resource: 'user', auth: true })
-                .then(() => {
-                    expect(server.requests[0]).to.have.property('url')
-                        .and.to.not.contain('auth=');
-                    done();
-                })
-                .catch(done);
-        });
-    });
-
-    describe('return value', () => {
-        let server;
-
-        beforeEach(() => {
-            server = sinon.fakeServer.create();
-        });
-
-        afterEach(() => {
-            server.restore();
-        });
-
-        it('should be a promise', (done) => {
-            server.respondWith([200, { 'Content-Type': 'application/json; charset=utf-8' }, '{}']);
-            const response = api.execute({ resource: 'user' });
-            expect(response).to.be.instanceof(Promise);
-            server.respond();
-            setTimeout(done, 50);
-        });
-
-        it('should resolve promise with response', (done) => {
-            const data = [{ id: 1337, firstname: 'John', lastname: 'Doe' }];
-            const serverResponse = JSON.stringify({ meta: {}, data });
-
-            server.respondWith([200, { 'Content-Type': 'application/json; charset=utf-8' }, serverResponse]);
-
-            api.execute({ resource: 'user' })
-                .then((response) => {
-                    expect(response.data).to.eql(data);
-                    done();
-                })
-                .catch(done);
-
-            server.respond();
-        });
-
-        it('should reject promise if JSON cannot be parsed', (done) => {
-            server.respondWith([200, { 'Content-Type': 'application/json; charset=utf-8' }, '["test": 123]']);
-
-            api.execute({ resource: 'user' })
-                .then(() => done(new Error('Expected promise to reject')))
-                .catch((err) => {
-                    expect(err).to.be.instanceof(SyntaxError);
-                    done();
+        test.describe('responses', () => {
+            test('should parse JSON automatically', async ({ page }) => {
+                const { result } = await runRequestTest(page, {
+                    executeArgs: { resource: 'article', select: 'title' },
+                    response: { json: { data: [{ title: 'Awesome title' }] } },
                 });
 
-            server.respond();
-        });
+                expect(result).toHaveProperty('data');
+                expect(result.data).toEqual([{ title: 'Awesome title' }]);
+            });
 
-        it('should not try to parse JSON if content-type doesn\'t match', (done) => {
-            server.respondWith([500, { 'Content-Type': 'text/html' }, 'Internal Server Error']);
+            test('test non-JSON content-types', async ({ page }) => {
+                const match = 'http://api.example.com/no-json/**';
 
-            api.execute({ resource: 'user' })
-                .then(() => done(new Error('Expected promise to reject')))
-                .catch((err) => {
-                    expect(err).to.be.instanceOf(Error)
-                        .with.property('message', 'Server Error: Internal Server Error');
-                    done();
-                });
-
-            server.respond();
-        });
-
-        it('should add response to error object', (done) => {
-            const floraReq = {
-                resource: 'user',
-                action: 'lock',
-                id: 1337
-            };
-            const serverResponse = JSON.stringify({
-                meta: {},
-                data: null,
-                error: {
-                    message: 'Account already locked',
-                    additional: {
-                        info: true
+                await page.route(match, async (route) => {
+                    try {
+                        await route.fulfill({ status: 500, contentType: 'text/html', body: '500 Internal Server Error' });
+                    } catch (err) {
+                        reject(err);
+                    } finally {
+                        await page.unroute(match);
                     }
-                }
+                });
+
+                const call = page.evaluate(() => {
+                    const client = new window.FloraClient({ url: 'http://api.example.com/' });
+                    return client.execute({ resource: 'no-json' });
+                });
+
+                await expect(call).rejects.toThrow('Server Error: Internal Server Error');
             });
 
-            server.respondWith([400, { 'Content-Type': 'application/json; charset=utf-8' }, serverResponse]);
+            test('test JSON parse errors', async ({ page }) => {
+                const match = 'http://api.example.com/invalid-json/**';
 
-            api.execute(floraReq)
-                .then(() => done(new Error('Expected promise to reject')))
-                .catch((err) => {
-                    expect(err)
-                        .to.have.property('response')
-                        .and.to.eql({
-                            meta: {},
-                            data: null,
-                            error: {
-                                message: 'Account already locked',
-                                additional: {
-                                    info: true
-                                }
-                            }
-                        });
-                    done();
+                await page.route(match, async (route) => {
+                    try {
+                        await route.fulfill({ contentType: 'application/json', body: '{' });
+                    } catch (err) {
+                        reject(err);
+                    } finally {
+                        await page.unroute(match);
+                    }
                 });
 
-            server.respond();
-        });
-
-        it('should handle request errors', (done) => {
-            server.respondWith((xhr) => xhr.error());
-
-            api.execute({ resource: 'article' })
-                .then(() => done(new Error('Expected promise to reject')))
-                .catch((err) => {
-                    expect(err).to.be.instanceOf(Error).with.property('message', 'Request failed');
-                    done();
+                const call = page.evaluate(() => {
+                    const client = new window.FloraClient({ url: 'http://api.example.com/' });
+                    return client.execute({ resource: 'invalid-json' });
                 });
 
-            server.respond();
-        });
-    });
-
-    describe('timeouts', () => {
-        const timeoutError = new Error('Expected promise to reject with timeout error');
-        let xhr;
-        let clock;
-
-        beforeEach(() => {
-            clock = sinon.useFakeTimers();
-            xhr = sinon.useFakeXMLHttpRequest();
+                await expect(call).rejects.toThrow(
+                    /SyntaxError: Expected property|JSON.parse: end of data while reading object|SyntaxError: JSON Parse error/,
+                );
+            });
         });
 
-        afterEach(() => {
-            clock.restore();
-            xhr.restore();
-        });
+        test('should support timeout setting', async ({ page }) => {
+            const call = page.evaluate((url) => {
+                const client = new window.FloraClient({ url, timeout: 250 });
+                return client.execute({ resource: 'timeout', delay: 500 });
+            }, httpServer.url);
 
-        it('should use default timeout', (done) => {
-            api.execute({ resource: 'user' })
-                .then(() => done(timeoutError))
-                .catch((err) => {
-                    expect(err).to.be.instanceOf(Error)
-                        .and.to.have.property('message', 'Request timed out after 15000 milliseconds');
-                    done();
-                });
-
-            clock.tick(18000);
-        });
-
-        it('should use custom timeout', (done) => {
-            const timeout = 3000;
-
-            (new FloraClient({ url, timeout }))
-                .execute({ resource: 'user' })
-                .then(() => done(timeoutError))
-                .catch((err) => {
-                    expect(err).to.be.instanceOf(Error)
-                        .and.to.have.property('message', `Request timed out after ${timeout} milliseconds`);
-                    done();
-                });
-
-            clock.tick(5000);
-        });
-    });
-
-    describe('formats', () => {
-        it('should trigger an error on non-JSON formats', (done) => {
-            api.execute({ resource: 'user', format: 'pdf' })
-                .then(() => done(new Error('Expected promise to reject')))
-                .catch((err) => {
-                    expect(err).to.be.instanceof(Error);
-                    expect(err.message).to.equal('Only JSON format supported');
-                    done();
-                });
+            await expect(call).rejects.toThrow('Request timed out after 250 milliseconds');
         });
     });
 });

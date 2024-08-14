@@ -4,28 +4,28 @@
 [![NPM version](https://img.shields.io/npm/v/flora-client-js.svg?style=flat)](https://www.npmjs.com/package/flora-client-js)
 [![NPM downloads](https://img.shields.io/npm/dm/flora-client-js.svg?style=flat)](https://www.npmjs.com/package/flora-client-js)
 
-Easily access [Flora](https://github.com/godmodelabs/flora) based APIs.
+Easily access [Flora](https://github.com/florajs) based APIs.
 
 String-Notation
 
 ```js
-const FloraClient = require('flora-client-js');
-const client = new FloraClient({ url: 'http://api.example.com/' });
+import FloraClient from 'flora-client-js';
 
-client.execute({
+const client = new FloraClient({ url: 'http://api.example.com/' });
+const response = await client.execute({
     resource: 'article',
-    select: 'id,name,subGroupA[id,name,subSubGroupA[attr1,attr2],subSubGroupB[subSubSubGroupA[attr1,attr2],subSubSubItem,subSubSubGroupB[attr1,attr2]]],attr';
+    select: 'id,name,subGroupA[id,name,subSubGroupA[attr1,attr2],subSubGroupB[subSubSubGroupA[attr1,attr2],subSubSubItem,subSubSubGroupB[attr1,attr2]]],attr',
     limit: 15,
-}).then((response) => console.log(response));
+});
 ```
 
 Object-Notation ( >= v0.4.1)
 
 ```js
-const FloraClient = require('flora-client-js');
-const client = new FloraClient({ url: 'http://api.example.com/' });
+import FloraClient from 'flora-client-js';
 
-client.execute({
+const client = new FloraClient({ url: 'http://api.example.com/' });
+const response = await client.execute({
     resource: 'article',
 	select: [
         'id',
@@ -44,9 +44,9 @@ client.execute({
                 },
             ],
         },
-    ];
-    limit: 15
-}).then(response => console.log(response));
+    ],
+    limit: 15,
+});
 ```
 
 ## License

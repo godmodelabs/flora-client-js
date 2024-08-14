@@ -1,8 +1,6 @@
-'use strict';
-
-const { describe, it } = require( 'node:test');
-const assert = require( 'node:assert/strict');
-const stringify = require('../src/util/stringify');
+import { describe, it } from 'node:test';
+import assert from 'node:assert/strict';
+import stringify from '../src/util/stringify.js';
 
 describe('stringify select', () => {
     it('should stringify simple arrays', () => {

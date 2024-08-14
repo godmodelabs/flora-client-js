@@ -1,6 +1,4 @@
-'use strict';
-
-module.exports = (id) => {
+const isValidRequestId = (id) => {
     const type = typeof id;
 
     if (type === 'number') {
@@ -12,3 +10,5 @@ module.exports = (id) => {
 
     return type === 'string' || type === 'number';
 };
+
+export default isValidRequestId;

@@ -1,10 +1,7 @@
-'use strict';
-
-const has = require('has');
-const { describe, it, after, afterEach } = require('node:test');
-const assert = require('node:assert/strict');
-const nock = require('nock');
-const FloraClient = require('../build/node');
+import { describe, it, after, afterEach } from 'node:test';
+import assert from 'node:assert/strict';
+import nock from 'nock';
+import FloraClient from '../build/node.js';
 
 describe('Flora node client', () => {
     const url = 'http://api.example.com/';
@@ -45,7 +42,7 @@ describe('Flora node client', () => {
         it('should treat action=retrieve as standard (and not transmit it)', async () => {
             const req = nock(url)
                 .get('/user/')
-                .query((queryObj) => !has(queryObj, 'action'))
+                .query((queryObj) => !Object.hasOwn(queryObj, 'action'))
                 .reply(200, response, { 'Content-Type': 'application/json; charset=utf-8' });
 
             await api.execute({ resource: 'user', action: 'retrieve' });
@@ -299,7 +296,7 @@ describe('Flora node client', () => {
         it('should not add httpHeaders option to request params', async () => {
             const req = nock(url)
                 .get('/user/')
-                .query((queryObj) => !has(queryObj, 'httpHeaders'))
+                .query((queryObj) => !Object.hasOwn(queryObj, 'httpHeaders'))
                 .reply(200, { meta: {}, data: [] }, { 'Content-Type': 'application/json; charset=utf-8' });
 
             await api.execute({ resource: 'user', httpHeaders: { 'X-Awesome': 'test' } });
@@ -422,7 +419,7 @@ describe('Flora node client', () => {
         it('should call handler function if authentication option is enabled', async () => {
             const auth = (floraReq) => {
                 floraReq.httpHeaders.Authorization = 'Bearer __token__';
-                return Promise.resolve();
+                return Promise.resolve(floraReq);
             };
             const req = nock(url, { reqheaders: { Authorization: 'Bearer __token__' } })
                 .get('/user/')
@@ -436,7 +433,7 @@ describe('Flora node client', () => {
         it('should add access_token parameter', async () => {
             const auth = (floraReq) => {
                 floraReq.access_token = '__token__';
-                return Promise.resolve();
+                return Promise.resolve(floraReq);
             };
             const req = nock(url)
                 .post('/user/1337')
@@ -467,7 +464,7 @@ describe('Flora node client', () => {
             const auth = (floraRequest) => Promise.resolve(floraRequest);
             const req = nock(url)
                 .get('/user/')
-                .query((queryObj) => !has(queryObj, 'auth'))
+                .query((queryObj) => !Object.hasOwn(queryObj, 'auth'))
                 .reply(200, { meta: {}, data: [] }, { 'Content-Type': 'application/json; charset=utf-8' });
 
             await new FloraClient({ url, auth }).execute({ resource: 'user', auth: true });

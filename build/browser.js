@@ -1,8 +1,6 @@
-'use strict';
-
-const Client = require('../src/Client');
-const Adapter = require('../src/Adapter/Xhr');
-const timeout = require('./timeout');
+import Client from '../src/Client';
+import Adapter from '../src/Adapter/Xhr';
+import timeout from './timeout';
 
 class FloraClient extends Client {
     constructor(opts) {
@@ -11,4 +9,4 @@ class FloraClient extends Client {
     }
 }
 
-module.exports = FloraClient;
+export default FloraClient;
