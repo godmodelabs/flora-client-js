@@ -1,23 +1,25 @@
-'use strict';
+import http from 'node:http';
+import https from 'node:https';
+import path from 'node:path';
 
-const http = require('http');
-const https = require('https');
-const path = require('path');
+import querystringify from '../util/querystringify';
 
-const querystringify = require('../util/querystringify');
-
-class Node {
+type NodeAdapterOptions = { 
     /**
-     * @param {Object}      opts
-     * @param {?number}     [opts.timeout=15000]     - Timeout in milliseconds
+     * Timeout in milliseconds
+     * @default 15000
      */
-    constructor(opts) {
-        this.timeout = opts.timeout;
+    timeout?: number,
+};
+
+export default class Node {
+    #timeout: number;
+
+    constructor(opts: NodeAdapterOptions) {
+        this.#timeout = opts.timeout ?? 15000;
     }
 
-    request(method, {
-        url, headers, params, jsonData
-    }) {
+    request(method, { url, headers, params, jsonData }: FloraClientRequestAdapterOptions) {
         let postBody;
 
         headers.Referer = process.argv.length > 0 ? 'file://' + path.resolve(process.argv[1]) : '';
@@ -62,13 +64,13 @@ class Node {
                 });
             });
 
-            req.setTimeout(this.timeout, () => req.abort());
+            req.setTimeout(this.#timeout, () => req.abort());
 
             if (postBody) req.write(postBody);
 
             req.on('error', (err) => {
                 if (req.aborted) {
-                    err = new Error(`Request timed out after ${this.timeout} milliseconds`);
+                    err = new Error(`Request timed out after ${this.#timeout} milliseconds`);
                     err.code = 'ETIMEDOUT';
                 }
                 reject(err);
@@ -77,5 +79,3 @@ class Node {
         });
     }
 }
-
-module.exports = Node;

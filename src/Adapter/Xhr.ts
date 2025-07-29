@@ -1,24 +1,26 @@
-'use strict';
+import isEmpty from '../util/isempty';
+import querystringify from '../util/querystringify';
 
-const has = require('has');
-
-const isEmpty = require('../util/isempty');
-const querystringify = require('../util/querystringify');
-
-class Xhr {
+type XhrAdapterOptions = { 
     /**
-     * @param {Object}      opts
-     * @param {?number}     [opts.timeout=15000]     - Timeout in milliseconds
+     * Timeout in milliseconds
+     * @default 15000
      */
-    constructor(opts) {
-        this.timeout = opts.timeout;
+    timeout?: number,
+};
+
+export default class Xhr {
+    #timeout: number;
+
+    constructor(opts: XhrAdapterOptions) {
+        this.#timeout = opts.timeout ?? 15000;
     }
 
     request(method, cfg) {
         const xhr = new XMLHttpRequest();
 
         xhr.open(method, cfg.url);
-        xhr.timeout = this.timeout; // must be placed after call to open method for IE11
+        xhr.timeout = this.#timeout; // must be placed after call to open method for IE11
 
         if (!isEmpty(cfg.headers)) {
             Object.keys(cfg.headers)
@@ -31,7 +33,7 @@ class Xhr {
 
         return new Promise((resolve, reject) => {
             xhr.addEventListener('error', () => reject(new Error('Request failed')));
-            xhr.addEventListener('timeout', () => reject(new Error(`Request timed out after ${this.timeout} milliseconds`)));
+            xhr.addEventListener('timeout', () => reject(new Error(`Request timed out after ${this.#timeout} milliseconds`)));
 
             xhr.addEventListener('load', () => {
                 const contentType = xhr.getResponseHeader('Content-Type');
@@ -58,5 +60,3 @@ class Xhr {
         });
     }
 }
-
-module.exports = Xhr;

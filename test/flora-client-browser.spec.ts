@@ -1,13 +1,9 @@
-'use strict';
-
-const { expect } = require('chai');
-const sinon = require('sinon');
-
-const FloraClient = require('../build/browser');
+import { beforeEach, describe, it } from 'node:test';
+import FloraClient from '../build/browser.ts';
 
 describe('Flora client', () => {
     const url = 'http://api.example.com';
-    let api;
+    let api: FloraClient;
 
     beforeEach(() => {
         api = new FloraClient({ url });
@@ -15,6 +11,7 @@ describe('Flora client', () => {
 
     describe('interface', () => {
         it('should require url on initialization', () => {
+            // @ts-expect-error That's the test!
             expect(() => new FloraClient({})).to.throw(Error, 'Flora API url must be set');
         });
 
