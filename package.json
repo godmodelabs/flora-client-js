@@ -10,7 +10,7 @@
     "lint-fix": "eslint --fix src/ build/ test/",
     "prepublishOnly": "npm run test && npm run build",
     "test:browser": "karma start --reporters mocha",
-    "test:node": "mocha --reporter spec test/flora-client-node.spec.js test/stringify.spec.js",
+    "test:node": "node --test test/flora-client-node.spec.js test/stringify.spec.js",
     "test": "npm run test:node && npm run test:browser"
   },
   "repository": "godmodelabs/flora-client-js",
