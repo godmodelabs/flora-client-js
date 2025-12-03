@@ -21,10 +21,7 @@ module.exports = function karmaConfig(config) {
         // available frameworks: https://npmjs.org/browse/keyword/karma-adapter
         frameworks: ['webpack', 'mocha'], // order of plugins is important
 
-        files: [
-            'test/flora-client-browser.spec.js',
-            'test/stringify.spec.js'
-        ],
+        files: ['test/flora-client-browser.spec.js', 'test/stringify.spec.js'],
 
         // list of files to exclude
         exclude: [],
@@ -35,13 +32,12 @@ module.exports = function karmaConfig(config) {
             // add webpack as preprocessor
             'build/browser.js': ['webpack'],
             'test/flora-client-browser.spec.js': ['webpack'],
-            'test/stringify.spec.js': ['webpack']
         },
 
         webpack: webpackConfig,
 
         webpackMiddleware: {
-            stats: 'errors-only'
+            stats: 'errors-only',
         },
 
         // test results reporter to use
@@ -67,6 +63,6 @@ module.exports = function karmaConfig(config) {
 
         // Continuous Integration mode
         // if true, Karma captures browsers, runs the tests and exits
-        singleRun: true
+        singleRun: true,
     });
 };
