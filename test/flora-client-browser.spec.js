@@ -71,7 +71,7 @@ async function runRequestTest(page, { ctorArgs = {}, executeArgs, response = { j
             const client = new window.FloraClient({
                 url: apiUrl,
                 ...ctorArgs,
-                ...(typeof window['authFn'] === 'function' ? { auth: window['authFn'] } : null),
+                ...(typeof window['authTestHandler'] === 'function' ? { auth: window['authTestHandler'] } : null),
             });
             return client.execute(args);
         },
@@ -184,8 +184,6 @@ test.describe('FloraClient', () => {
 
                 expect(request.method()).toEqual('POST');
                 expect(request.postData()).toBeNull();
-                expect(headers).toHaveProperty('content-type');
-                expect(headers['content-type']).toEqual('application/x-www-form-urlencoded');
             });
         });
 
@@ -379,12 +377,15 @@ test.describe('FloraClient', () => {
             });
 
             test('should use configured auth handler', async ({ page }) => {
-                // functions cannot be serialized in page.evaluate method
-                // add global function as workaround
-                await page.exposeFunction('authFn', async (floraReq) => {
-                    floraReq.httpHeaders.Authorization = 'Bearer __token__';
-                    return Promise.resolve(floraReq);
+                // functions cannot be serialized => add global function as workaround
+                await page.evaluate(() => {
+                    window.authTestHandler = async (request) => {
+                        await new Promise((resolve) => setTimeout(resolve, 10));
+                        request.headers.set('Authorization', 'Bearer __token__');
+                        return request;
+                    };
                 });
+
                 const { request } = await runRequestTest(page, {
                     executeArgs: { resource: 'article', filter: 'isPremium=true', auth: true },
                 });
@@ -398,7 +399,7 @@ test.describe('FloraClient', () => {
             });
         });
 
-        test('HTTP (default) headers', async ({ page }) => {
+        test('HTTP headers', async ({ page }) => {
             const { request } = await runRequestTest(page, {
                 executeArgs: { resource: 'article', httpHeaders: { 'X-Foo': 'bar' } },
             });
@@ -406,6 +407,9 @@ test.describe('FloraClient', () => {
             const headers = request.headers();
             expect(headers).toHaveProperty('x-foo');
             expect(headers['x-foo']).toEqual('bar');
+
+            const url = new URL(request.url());
+            expect(url.searchParams).not.toHaveProperty('httpHeaders');
         });
 
         test.describe('responses', () => {

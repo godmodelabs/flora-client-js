@@ -1,5 +1,3 @@
-import querystringify from './util/querystringify.js';
-import httpmethod from './util/httpmethod.js';
 import stringify from './util/stringify.js';
 
 function hasOwn(obj, key) {
@@ -41,7 +39,7 @@ class Client {
         /**
          * URL of Flora instance
          *
-         * @name FloraClient#url
+         * @name Client#url
          * @type {string}
          * @readonly
          */
@@ -63,7 +61,7 @@ class Client {
                 .forEach((param) => this.forceGetParams.push(param));
         }
 
-        if (options.auth && typeof options.auth === 'function') {
+        if (typeof options.auth === 'function') {
             this.auth = options.auth;
         }
 
@@ -71,127 +69,96 @@ class Client {
     }
 
     /**
-     * Execute request against configured Flora instance.
+     * Execute floraRequest against configured Flora instance.
      *
-     * @param {Object}  request                     - Request configuration object
-     * @param {string}  request.resource            - Resource name
-     * @param {(number|string)=} request.id         - Unique identifier of an item
-     * @param {string=} [request.format=json]       - Response format
-     * @param {string=} [request.action=retrieve]   - API action
-     * @param {string=} request.select              - Retrieve given resource attributes
-     * @param {string=} request.filter              - Filter items by given criteria
-     * @param {string=} request.order               - Order items by given criteria
-     * @param {number=} request.limit               - Limit result set
-     * @param {number=} request.page                - Paginate through result
-     * @param {string=} request.search              - Search items by full text search
-     * @param {Object=} request.data                - Send data as JSON
-     * @param {boolean=}[request.cache=true]        - Use HTTP caching
-     * @param {string=} request.httpMethod          - Explicitly overwrite HTTP method
-     * @param {Object=} request.httpHeaders         - Additional HTTP headers
-     * @param {boolean=} [request.authenticate=false]- Use the authentication handler for request
+     * @param {Object}  floraRequest                     - Request configuration object
+     * @param {string}  floraRequest.resource            - Resource name
+     * @param {(number|string)=} floraRequest.id         - Unique identifier of an item
+     * @param {string=} [floraRequest.format=json]       - Response format
+     * @param {string=} [floraRequest.action=retrieve]   - API action
+     * @param {string=} floraRequest.select              - Retrieve given resource attributes
+     * @param {string=} floraRequest.filter              - Filter items by given criteria
+     * @param {string=} floraRequest.order               - Order items by given criteria
+     * @param {number=} floraRequest.limit               - Limit result set
+     * @param {number=} floraRequest.page                - Paginate through result
+     * @param {string=} floraRequest.search              - Search items by full text search
+     * @param {Object=} floraRequest.data                - Send data as JSON
+     * @param {boolean=}[floraRequest.cache=true]        - Use HTTP caching
+     * @param {string=} floraRequest.httpMethod          - Explicitly overwrite HTTP method
+     * @param {Object=} floraRequest.httpHeaders         - Additional HTTP headers
+     * @param {boolean=} [floraRequest.authenticate=false]- Use the authentication handler for floraRequest
      * @return {Promise}
      */
-    execute(request) {
-        if (hasOwn(request, 'id') && !isValidRequestId(request.id)) {
+    execute(floraRequest) {
+        if (hasOwn(floraRequest, 'id') && !isValidRequestId(floraRequest.id)) {
             return Promise.reject(new Error('Request id must be of type number or string'));
         }
 
-        return this._execute(request);
-    }
-
-    _execute(request) {
-        const url = new URL('/' + request.resource + '/' + (request.id || ''), this.url);
-        const init = { headers: new Headers() };
-        const skipCache = hasOwn(request, 'cache') && !!request.cache === false;
-        const opts = {
-            resource: request.resource,
-            id: request.id,
-            params: {},
-            headers: request.httpHeaders || {},
-        };
-        let getParams;
-
-        if (globalThis.process) init.headers.set('referer', new URL('file://' + process.argv[1] + '/').href);
-
-        if (request.format && String(request.format).toLocaleLowerCase() !== 'json') {
+        if (floraRequest.format && String(floraRequest.format).toLocaleLowerCase() !== 'json') {
             return Promise.reject(new Error('Only JSON format supported'));
         }
 
-        if (typeof request.select === 'object') request.select = stringify(request.select);
-        if (request.data) {
-            // post property as JSON
-            opts.jsonData = JSON.stringify(request.data);
-            init.headers.set('content-type', 'application/json; charset=utf-8');
-        }
-
-        opts.params = Object.keys(request)
-            .filter((key) => hasOwn(request, key))
-            .filter((key) => ['resource', 'id', 'cache', 'data', 'auth', 'httpMethod', 'httpHeaders'].indexOf(key) === -1)
-            .reduce((acc, key) => {
-                acc[key] = request[key];
-                return acc;
-            }, {});
-
-        if (this.defaultParams) {
-            opts.params = Object.keys(this.defaultParams)
-                .filter((key) => !hasOwn(opts.params, key))
-                .reduce((acc, key) => {
-                    acc[key] = this.defaultParams[key];
-                    return acc;
-                }, opts.params);
-        }
-
-        if (opts.params.action && opts.params.action === 'retrieve') delete opts.params.action;
-        const httpMethod = !hasOwn(request, 'httpMethod') ? httpmethod(opts) : request.httpMethod;
-        init.method = httpMethod;
-        if (httpMethod === 'POST' && !opts.jsonData) init.headers.set('content-type', 'application/x-www-form-urlencoded');
-
-        if (this.forceGetParams.length) {
-            getParams = this.forceGetParams
-                .filter((key) => typeof opts.params[key] !== 'undefined')
-                .reduce((acc, key) => {
-                    acc[key] = opts.params[key];
-                    delete opts.params[key]; // TODO: move somewhere else
-                    return acc;
-                }, {});
-        }
-
-        if (typeof opts.params === 'object' && !isEmpty(opts.params) && (opts.jsonData || httpMethod === 'GET')) {
-            getParams = Object.keys(opts.params)
-                .filter((key) => hasOwn(opts.params, key))
-                .reduce((acc, key) => {
-                    acc[key] = opts.params[key];
-                    return acc;
-                }, getParams);
-            delete opts.params;
-        }
-
-        if (isEmpty(opts.params)) delete opts.params;
-        if (!isEmpty(getParams)) {
-            Object.entries(getParams).forEach(([param, value]) => url.searchParams.append(param, value));
-        }
-
-        // add cache breaker to bypass HTTP caching
-        if (skipCache) url.searchParams.append('_', String(Date.now()));
-
-        if (opts.jsonData) init.body = opts.jsonData;
-        if (opts.params && httpMethod === 'POST') init.body = querystringify(opts.params);
-        if (init.body) init.headers.set('content-length', String(new Blob([init.body]).size));
-
-        const req = new Request(url, init);
-        if (!request.auth) {
-            return this._request(req);
-        }
-
-        if (!this.auth) {
-            return Promise.reject(new Error('Auth requests require an auth handler'));
-        }
-
-        return this.auth(req).then(this._request.bind(this));
+        const request = this._prepare(floraRequest);
+        if (!floraRequest.auth) return this._request(request);
+        if (!this.auth) return Promise.reject(new Error('Auth requests require an auth handler'));
+        return this.auth(request).then(this._request.bind(this));
     }
 
-    async _request(req) {
-        const response = await fetch(req, { signal: AbortSignal.timeout(this.timeout) });
+    _prepare(floraRequest) {
+        const url = new URL(this.url);
+        const headers = new Headers({
+            ...(globalThis.process ? { referer: new URL('file://' + process.argv[1] + '/').href } : null),
+            ...(floraRequest.httpHeaders && !isEmpty(floraRequest.httpHeaders) ? floraRequest.httpHeaders : null),
+        });
+        let searchParams = new URLSearchParams();
+
+        url.pathname += floraRequest.resource + '/' + (floraRequest.id || '');
+
+        if (floraRequest?.action === 'retrieve') delete floraRequest.action;
+        if (typeof floraRequest.select === 'object') floraRequest.select = stringify(floraRequest.select);
+
+        for (const [param, value] of Object.entries({ ...this.defaultParams, ...floraRequest })) {
+            if (['resource', 'id', 'data', 'cache', 'auth', 'httpMethod', 'httpHeaders'].includes(param)) {
+                continue;
+            }
+
+            if (this.forceGetParams.includes(param)) {
+                url.searchParams.append(param, value);
+                continue;
+            }
+
+            searchParams.set(param, value);
+        }
+
+        let { method, body, contentType } = (() => {
+            if (!isEmpty(floraRequest.data)) {
+                return { method: 'POST', body: JSON.stringify(floraRequest.data), contentType: 'application/json; charset=utf-8' };
+            }
+
+            if (searchParams.toString().length > 2000) {
+                const result = { method: 'POST', body: searchParams.toString(), contentType: 'application/x-www-form-urlencoded' };
+                searchParams = new URLSearchParams();
+                return result;
+            }
+
+            return { method: url.searchParams.has('action') ? 'POST' : 'GET' };
+        })();
+
+        if (contentType) headers.set('Content-Type', contentType);
+        if (body) headers.set('Content-Length', String(new Blob([body]).size));
+        if (searchParams.size) searchParams.entries().forEach(([key, value]) => url.searchParams.set(key, value));
+
+        method = hasOwn(floraRequest, 'httpMethod') ? floraRequest.httpMethod : method;
+        // add cache breaker to bypass HTTP caching
+        if (method === 'GET' && hasOwn(floraRequest, 'cache') && !!floraRequest.cache === false) {
+            url.searchParams.append('_', String(Date.now()));
+        }
+
+        return new Request(url, { method, headers, body });
+    }
+
+    async _request(request) {
+        const response = await fetch(request, { signal: AbortSignal.timeout(this.timeout) });
 
         const contentType = response.headers.get('content-type');
         if (!contentType?.startsWith('application/json')) {

@@ -1,7 +1,7 @@
 import { after, afterEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import nock from 'nock';
-import FloraClient from '../dist/flora-client.esm.js';
+import FloraClient from '../src/Client.js';
 
 describe('Flora node client', () => {
     const url = 'http://api.example.com/';
@@ -51,12 +51,9 @@ describe('Flora node client', () => {
         });
 
         it('should add action parameter', async () => {
-            const req = nock(url)
-                .post('/user/1337')
-                .query({ action: 'update' })
-                .reply(200, response, { 'Content-Type': 'application/json; charset=utf-8' });
+            const req = nock(url).post('/article/1337').query({ action: 'count' }).reply(200, response);
 
-            await api.execute({ resource: 'user', id: 1337, action: 'update' });
+            await api.execute({ resource: 'article', id: 1337, action: 'count' });
 
             assert.ok(req.isDone());
         });
@@ -206,9 +203,7 @@ describe('Flora node client', () => {
             });
 
             it('should use POST for other actions than "retrieve"', async () => {
-                const req = nock(url, {
-                    reqheaders: { 'content-type': (header) => header.includes('application/x-www-form-urlencoded') },
-                })
+                const req = nock(url)
                     .post('/user/1337')
                     .query({ action: 'lock' })
                     .reply(200, response, { 'Content-Type': 'application/json; charset=utf-8' });
@@ -426,37 +421,43 @@ describe('Flora node client', () => {
 
     describe('authentication', () => {
         it('should call handler function if authentication option is enabled', async () => {
-            const auth = (request) => {
-                request.headers.set('authorization', 'Bearer __token__');
-                return Promise.resolve(request);
-            };
             const req = nock(url, { reqheaders: { Authorization: 'Bearer __token__' } })
-                .get('/user/')
+                .post('/user/1337')
                 .reply(200, { meta: {}, data: [] }, { 'Content-Type': 'application/json; charset=utf-8' });
 
-            await new FloraClient({ url, auth }).execute({ resource: 'user', auth: true });
+            await new FloraClient({
+                url,
+                auth: (request) => {
+                    request.headers.set('authorization', 'Bearer __token__');
+                    return Promise.resolve(request);
+                },
+            }).execute({ resource: 'user', id: 1337, data: { nickname: 'John Doe' }, auth: true });
 
             assert.ok(req.isDone());
         });
 
         it('should add access_token parameter', async () => {
-            const auth = (request) => {
-                const url = URL.parse(request.url);
-                url.searchParams.append('access_token', '__token__');
-                return Promise.resolve(new Request(url, request));
-            };
             const req = nock(url)
                 .post('/user/1337')
                 .query({
-                    access_token: '__token__',
                     action: 'update',
+                    access_token: '__token__',
                 })
                 .reply(200, { meta: {}, data: [] }, { 'Content-Type': 'application/json; charset=utf-8' });
 
-            await new FloraClient({ url, auth }).execute({
+            await new FloraClient({
+                url,
+                auth: async (request) => {
+                    const url = URL.parse(request.url);
+                    await new Promise((resolve) => process.nextTick(resolve));
+                    url.searchParams.append('access_token', '__token__');
+                    return Promise.resolve(new Request(url, request));
+                },
+            }).execute({
                 resource: 'user',
                 id: 1337,
                 action: 'update',
+                data: { nickname: 'John Doe' },
                 auth: true,
             });
 
