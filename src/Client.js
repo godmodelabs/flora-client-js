@@ -96,19 +96,12 @@ class Client {
             return Promise.reject(new Error('Request id must be of type number or string'));
         }
 
-        if (request.auth) {
-            if (!this.auth) {
-                return Promise.reject(new Error('Auth requests require an auth handler'));
-            }
-
-            request.httpHeaders = request.httpHeaders || {};
-            return this.auth(request).then((authenticatedRequest) => this._execute(authenticatedRequest));
-        }
-
         return this._execute(request);
     }
 
     _execute(request) {
+        const url = new URL('/' + request.resource + '/' + (request.id || ''), this.url);
+        const init = { headers: new Headers() };
         const skipCache = hasOwn(request, 'cache') && !!request.cache === false;
         const opts = {
             resource: request.resource,
@@ -118,7 +111,7 @@ class Client {
         };
         let getParams;
 
-        opts.url = this.url + request.resource + '/' + (request.id || '');
+        if (globalThis.process) init.headers.set('referer', new URL('file://' + process.argv[1] + '/').href);
 
         if (request.format && String(request.format).toLocaleLowerCase() !== 'json') {
             return Promise.reject(new Error('Only JSON format supported'));
@@ -128,7 +121,7 @@ class Client {
         if (request.data) {
             // post property as JSON
             opts.jsonData = JSON.stringify(request.data);
-            opts.headers['Content-Type'] = 'application/json; charset=utf-8';
+            init.headers.set('content-type', 'application/json; charset=utf-8');
         }
 
         opts.params = Object.keys(request)
@@ -150,7 +143,8 @@ class Client {
 
         if (opts.params.action && opts.params.action === 'retrieve') delete opts.params.action;
         const httpMethod = !hasOwn(request, 'httpMethod') ? httpmethod(opts) : request.httpMethod;
-        if (httpMethod === 'POST' && !opts.jsonData) opts.headers['Content-Type'] = 'application/x-www-form-urlencoded';
+        init.method = httpMethod;
+        if (httpMethod === 'POST' && !opts.jsonData) init.headers.set('content-type', 'application/x-www-form-urlencoded');
 
         if (this.forceGetParams.length) {
             getParams = this.forceGetParams
@@ -173,29 +167,31 @@ class Client {
         }
 
         if (isEmpty(opts.params)) delete opts.params;
-        if (!isEmpty(getParams)) opts.url += '?' + querystringify(getParams);
+        if (!isEmpty(getParams)) {
+            Object.entries(getParams).forEach(([param, value]) => url.searchParams.append(param, value));
+        }
 
         // add cache breaker to bypass HTTP caching
-        if (skipCache) opts.url += (opts.url.indexOf('?') !== -1 ? '&' : '?') + '_=' + new Date().getTime();
+        if (skipCache) url.searchParams.append('_', String(Date.now()));
 
-        return this._request(httpMethod, opts);
+        if (opts.jsonData) init.body = opts.jsonData;
+        if (opts.params && httpMethod === 'POST') init.body = querystringify(opts.params);
+        if (init.body) init.headers.set('content-length', String(new Blob([init.body]).size));
+
+        const req = new Request(url, init);
+        if (!request.auth) {
+            return this._request(req);
+        }
+
+        if (!this.auth) {
+            return Promise.reject(new Error('Auth requests require an auth handler'));
+        }
+
+        return this.auth(req).then(this._request.bind(this));
     }
 
-    async _request(method, { url, headers, params, jsonData }) {
-        let postBody;
-
-        if (globalThis.process) headers.Referer = new URL('file://' + process.argv[1] + '/').href;
-
-        if (jsonData) postBody = jsonData;
-        if (params && method === 'POST') postBody = querystringify(params);
-        if (postBody) headers['Content-Length'] = new Blob([postBody]).size;
-
-        const response = await fetch(url, {
-            method,
-            headers,
-            ...(postBody && { body: postBody }),
-            signal: AbortSignal.timeout(this.timeout),
-        });
+    async _request(req) {
+        const response = await fetch(req, { signal: AbortSignal.timeout(this.timeout) });
 
         const contentType = response.headers.get('content-type');
         if (!contentType?.startsWith('application/json')) {

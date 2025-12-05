@@ -426,9 +426,9 @@ describe('Flora node client', () => {
 
     describe('authentication', () => {
         it('should call handler function if authentication option is enabled', async () => {
-            const auth = (floraReq) => {
-                floraReq.httpHeaders.Authorization = 'Bearer __token__';
-                return Promise.resolve(floraReq);
+            const auth = (request) => {
+                request.headers.set('authorization', 'Bearer __token__');
+                return Promise.resolve(request);
             };
             const req = nock(url, { reqheaders: { Authorization: 'Bearer __token__' } })
                 .get('/user/')
@@ -440,9 +440,10 @@ describe('Flora node client', () => {
         });
 
         it('should add access_token parameter', async () => {
-            const auth = (floraReq) => {
-                floraReq.access_token = '__token__';
-                return Promise.resolve(floraReq);
+            const auth = (request) => {
+                const url = URL.parse(request.url);
+                url.searchParams.append('access_token', '__token__');
+                return Promise.resolve(new Request(url, request));
             };
             const req = nock(url)
                 .post('/user/1337')
