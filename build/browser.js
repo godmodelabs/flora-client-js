@@ -1,5 +1,5 @@
 import Client from '../src/Client';
-import Adapter from '../src/Adapter/Xhr';
+import Adapter from '../src/Adapter/Node.js';
 import timeout from './timeout';
 
 class FloraClient extends Client {

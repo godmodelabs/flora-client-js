@@ -1,5 +1,3 @@
-import path from 'node:path';
-
 import querystringify from '../util/querystringify.js';
 
 class Node {
@@ -14,11 +12,11 @@ class Node {
     async request(method, { url, headers, params, jsonData }) {
         let postBody;
 
-        headers.Referer = process.argv.length > 0 ? 'file://' + path.resolve(process.argv[1]) : '';
+        if (globalThis.process) headers.Referer = new URL('file://' + process.argv[1] + '/').href;
 
         if (jsonData) postBody = jsonData;
         if (params && method === 'POST') postBody = querystringify(params);
-        if (postBody) headers['Content-Length'] = Buffer.from(postBody).byteLength;
+        if (postBody) headers['Content-Length'] = new Blob([postBody]).size;
 
         const response = await fetch(url, {
             method,

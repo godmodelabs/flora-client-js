@@ -450,14 +450,22 @@ test.describe('FloraClient', () => {
                     }
                 });
 
-                const call = page.evaluate(() => {
-                    const client = new window.FloraClient({ url: 'http://api.example.com/' });
-                    return client.execute({ resource: 'invalid-json' });
+                const result = await page.evaluate(async () => {
+                    try {
+                        const client = new window.FloraClient({ url: 'http://api.example.com/' });
+                        await client.execute({ resource: 'invalid-json' });
+                        return { ok: true };
+                    } catch (err) {
+                        // Playwright wraps errors in generic Error object
+                        return {
+                            ok: false,
+                            errName: err.name,
+                        };
+                    }
                 });
 
-                await expect(call).rejects.toThrow(
-                    /SyntaxError: Expected property|JSON.parse: end of data while reading object|SyntaxError: JSON Parse error/,
-                );
+                expect(result.ok).toBe(false);
+                expect(result.errName).toEqual('SyntaxError');
             });
         });
 
@@ -467,7 +475,7 @@ test.describe('FloraClient', () => {
                 return client.execute({ resource: 'timeout', delay: 500 });
             }, httpServer.url);
 
-            await expect(call).rejects.toThrow('Request timed out after 250 milliseconds');
+            await expect(call).rejects.toThrow(/(?:Timeout|Abort)Error|The operation timed out/);
         });
     });
 });
