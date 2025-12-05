@@ -1,6 +1,5 @@
 import querystringify from './util/querystringify.js';
 import httpmethod from './util/httpmethod.js';
-import isValidRequestId from './util/valid-request-id.js';
 import stringify from './util/stringify.js';
 
 function hasOwn(obj, key) {
@@ -9,6 +8,19 @@ function hasOwn(obj, key) {
 
 function isEmpty(obj) {
     return obj === null || typeof obj === 'undefined' || Object.keys(obj).length === 0;
+}
+
+function isValidRequestId(id) {
+    const type = typeof id;
+
+    if (type === 'number') {
+        // eslint-disable-next-line no-restricted-globals
+        if (isNaN(id)) return false;
+        // eslint-disable-next-line no-restricted-globals
+        if (!isFinite(id)) return false;
+    }
+
+    return type === 'string' || type === 'number';
 }
 
 class Client {
