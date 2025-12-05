@@ -2,7 +2,6 @@
 .git*
 .idea/
 benchmark/
-build/
 examples/
 node_modules/
 npm-debug.log

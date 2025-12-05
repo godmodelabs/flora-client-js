@@ -12,17 +12,13 @@ class Client {
     /**
      * Simple client to access Flora APIs.
      *
-     * Uses {@link https://developer.mozilla.org/en/docs/Web/API/XMLHttpRequest|XMLHttpRequest} in browsers and
-     * {@link https://nodejs.org/api/http.html|http}/{@link https://nodejs.org/api/https.html|https} module in Node.js
-     * to run requests against Flora instance.
-     *
      * @param {Object}  options                     - Client config options
      * @param {string}  options.url                 - URL of Flora instance
-     * @param {Object}  options.adapter             - Instance of HTTP adapter
      * @param {?Object} options.defaultParams       - Parameters added to each request automatically
      * @param {?Array}  [options.forceGetParams=['client_id', 'action', 'access_token']]
      *                                              - Parameters are always send in query string
      * @param {?Function}   options.auth            - Auth handler (Promise)
+     * @param {?number} [options.timeout=15000]     - default request timeout
      */
     constructor(options) {
         if (!options.url) throw new Error('Flora API url must be set');
@@ -56,7 +52,7 @@ class Client {
             this.auth = options.auth;
         }
 
-        this.adapter = options.adapter;
+        this.timeout = options.timeout || 15000;
     }
 
     /**
@@ -167,7 +163,37 @@ class Client {
         // add cache breaker to bypass HTTP caching
         if (skipCache) opts.url += (opts.url.indexOf('?') !== -1 ? '&' : '?') + '_=' + new Date().getTime();
 
-        return this.adapter.request(httpMethod, opts);
+        return this._request(httpMethod, opts);
+    }
+
+    async _request(method, { url, headers, params, jsonData }) {
+        let postBody;
+
+        if (globalThis.process) headers.Referer = new URL('file://' + process.argv[1] + '/').href;
+
+        if (jsonData) postBody = jsonData;
+        if (params && method === 'POST') postBody = querystringify(params);
+        if (postBody) headers['Content-Length'] = new Blob([postBody]).size;
+
+        const response = await fetch(url, {
+            method,
+            headers,
+            ...(postBody && { body: postBody }),
+            signal: AbortSignal.timeout(this.timeout),
+        });
+
+        const contentType = response.headers.get('content-type');
+        if (!contentType?.startsWith('application/json')) {
+            if (response.status < 400) throw new Error(`Server Error: Invalid content type: "${contentType}")`);
+            throw new Error(`Server Error: ${response.statusText || `Invalid content type: "${contentType}"`}`);
+        }
+
+        if (response.status < 400) return response.json();
+
+        const payload = await response.json();
+        const err = new Error(payload?.error?.message ?? `Server Error: ${response.status || 'Invalid JSON'}`);
+        err.response = payload;
+        throw err;
     }
 }
 

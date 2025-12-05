@@ -1,7 +1,7 @@
 import { after, afterEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import nock from 'nock';
-import FloraClient from '../build/node.js';
+import FloraClient from '../dist/flora-client.esm.js';
 
 describe('Flora node client', () => {
     const url = 'http://api.example.com/';

@@ -31,6 +31,7 @@
   "main": "dist/flora-client.cjs",
   "exports": {
     ".": {
+      "import": "./dist/flora-client.esm.js",
       "require": "./dist/flora-client.cjs"
     }
   },
