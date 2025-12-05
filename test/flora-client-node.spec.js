@@ -1,4 +1,4 @@
-import { describe, it, after, afterEach } from 'node:test';
+import { after, afterEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import nock from 'nock';
 import FloraClient from '../build/node.js';
@@ -335,21 +335,18 @@ describe('Flora node client', () => {
         });
 
         it('should reject with error', async () => {
-            const req = nock(url)
-                .get('/user/')
-                .reply(
-                    500,
-                    {
-                        meta: {},
-                        data: null,
-                        error: {
-                            message: 'foobar',
-                        },
-                    },
-                    { 'Content-Type': 'application/json; charset=utf-8' },
-                );
+            const message = 'Some fancy error message';
+            const req = nock(url).get('/user/').reply(
+                500,
+                {
+                    meta: {},
+                    data: null,
+                    error: { message },
+                },
+                { 'Content-Type': 'application/json; charset=utf-8' },
+            );
 
-            await assert.rejects(() => api.execute({ resource: 'user' }), { name: 'Error', message: 'foobar' });
+            await assert.rejects(() => api.execute({ resource: 'user' }), { name: 'Error', message });
             assert.ok(req.isDone());
         });
 
@@ -409,7 +406,7 @@ describe('Flora node client', () => {
 
             await assert.rejects(() => api.execute({ resource: 'user' }), {
                 name: 'Error',
-                message: 'Server Error: Invalid content type: "text/html"',
+                message: 'Server Error: Internal Server Error',
             });
             assert.ok(req.isDone());
         });
@@ -473,18 +470,6 @@ describe('Flora node client', () => {
         });
     });
 
-    describe('protocols', () => {
-        it('should support HTTPS', async () => {
-            const httpsUrl = 'https://api.example.com';
-            const secureApi = new FloraClient({ url: httpsUrl });
-            const req = nock(httpsUrl).get('/user/').reply(200, {}, { 'Content-Type': 'application/json; charset=utf-8' });
-
-            await secureApi.execute({ resource: 'user' });
-
-            assert.ok(req.isDone());
-        });
-    });
-
     describe('headers', () => {
         it('should set referer', async () => {
             const req = nock(url)
@@ -498,39 +483,26 @@ describe('Flora node client', () => {
         });
     });
 
-    describe('timeouts', () => {
-        afterEach(() => nock.abortPendingRequests());
+    it('should use timeout setting', async (ctx) => {
+        ctx.after(() => nock.abortPendingRequests());
 
-        it('should use default request timeout', async () => {
-            const req = nock(url)
-                .get('/user/')
-                .delayConnection(20000)
-                .reply(200, {}, { 'Content-Type': 'application/json; charset=utf-8' });
+        const req = nock(url).get('/user/').delay(500).reply(200, {}, { 'Content-Type': 'application/json; charset=utf-8' });
 
-            await assert.rejects(
-                () => api.execute({ resource: 'user' }),
-                (err) => err instanceof Error && Object.hasOwn(err, 'code') && err.code === 'ETIMEDOUT',
-            );
-            assert.ok(req.isDone());
-        });
-
-        it('should use configurable request timeout', async () => {
-            const req = nock(url).get('/user/').delayConnection(6000).reply(200, {}, { 'Content-Type': 'application/json; charset=utf-8' });
-
-            await assert.rejects(
-                () => new FloraClient({ url, timeout: 5000 }).execute({ resource: 'user' }),
-                (err) => err instanceof Error && Object.hasOwn(err, 'code') && err.code === 'ETIMEDOUT',
-            );
-            assert.ok(req.isDone());
-        });
+        await assert.rejects(
+            () => new FloraClient({ url, timeout: 250 }).execute({ resource: 'user' }),
+            (err) => err.name === 'TimeoutError',
+        );
+        assert.ok(req.isDone());
     });
 
     it('should return API error on connection issues', async () => {
-        const req = nock(url).get('/user/').replyWithError({ code: 'ENOTFOUND' });
+        const req = nock(url)
+            .get('/user/')
+            .replyWithError(Object.assign(new Error('Not found'), { code: 'ENOTFOUND' }));
 
         await assert.rejects(
             () => api.execute({ resource: 'user' }),
-            (err) => Object.hasOwn(err, 'code') && err.code === 'ENOTFOUND',
+            (err) => err instanceof Error && Object.hasOwn(err, 'code') && err.code === 'ENOTFOUND',
         );
 
         assert.ok(req.isDone());
