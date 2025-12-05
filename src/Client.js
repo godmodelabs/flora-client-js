@@ -1,4 +1,3 @@
-import isEmpty from './util/isempty.js';
 import querystringify from './util/querystringify.js';
 import httpmethod from './util/httpmethod.js';
 import isValidRequestId from './util/valid-request-id.js';
@@ -6,6 +5,10 @@ import stringify from './util/stringify.js';
 
 function hasOwn(obj, key) {
     return Object.prototype.hasOwnProperty.call(obj, key);
+}
+
+function isEmpty(obj) {
+    return obj === null || typeof obj === 'undefined' || Object.keys(obj).length === 0;
 }
 
 class Client {
