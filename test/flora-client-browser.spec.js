@@ -337,12 +337,15 @@ test.describe('FloraClient', () => {
             });
 
             test('should switch to POST if querystring is too large', async ({ page }) => {
+                const select = 'select'.repeat(150);
+                const filter = 'filter'.repeat(150);
+                const search = 'search term'.repeat(150);
                 const { request } = await runRequestTest(page, {
                     executeArgs: {
                         resource: 'article',
-                        select: 'select'.repeat(150),
-                        filter: 'filter'.repeat(150),
-                        search: 'search term'.repeat(150),
+                        select,
+                        filter,
+                        search,
                         limit: 100,
                         page: 10,
                     },
@@ -357,9 +360,9 @@ test.describe('FloraClient', () => {
                 expect(headers['content-type']).toEqual('application/x-www-form-urlencoded');
 
                 const searchParams = new URLSearchParams(request.postData());
-                expect(searchParams.has('select')).toBeTruthy();
-                expect(searchParams.has('filter')).toBeTruthy();
-                expect(searchParams.has('search')).toBeTruthy();
+                expect(searchParams.get('select')).toEqual(select);
+                expect(searchParams.get('filter')).toEqual(filter);
+                expect(searchParams.get('search')).toEqual(search);
                 expect(searchParams.get('limit')).toEqual('100');
                 expect(searchParams.get('page')).toEqual('10');
             });

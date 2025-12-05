@@ -235,16 +235,28 @@ describe('Flora node client', () => {
             });
 
             it('should switch to POST if querystring gets too large', async () => {
+                const select = 'select'.repeat(100);
+                const filter = 'filter'.repeat(100);
+                const search = 'searchterm'.repeat(100);
                 const floraReq = {
                     resource: 'user',
-                    select: 'select'.repeat(150),
-                    filter: 'filter'.repeat(150),
-                    search: 'search term'.repeat(150),
+                    select,
+                    filter,
+                    search,
                     limit: 100,
                     page: 10,
                 };
-                const req = nock(url)
-                    .post('/user/', /select=(select){100,}/)
+                const req = nock(url, { reqheaders: { 'content-type': 'application/x-www-form-urlencoded' } })
+                    .post('/user/', (body) => {
+                        const searchParams = new URLSearchParams(body);
+                        return (
+                            searchParams.get('select') === select &&
+                            searchParams.get('filter') === filter &&
+                            searchParams.get('search') === search &&
+                            searchParams.get('limit') === '100' &&
+                            searchParams.get('page') === '10'
+                        );
+                    })
                     .reply(200, response);
 
                 await api.execute(floraReq);
