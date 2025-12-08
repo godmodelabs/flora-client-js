@@ -1,13 +1,3 @@
-const entries = Object.entries
-    ? Object.entries
-    : (obj) => { // IE11 fallback
-        const keys = Object.keys(obj);
-        let keysCount = keys.length;
-        const iter = new Array(keysCount);
-        while (keysCount--) iter[keysCount] = [keys[keysCount], obj[keys[keysCount]]];
-        return iter;
-    };
-
 /**
  * @param {Array|Object|string} spec
  * @return string
@@ -18,11 +8,13 @@ function stringify(spec) {
     }
 
     if (typeof spec === 'object') {
-        return entries(spec)
+        return Object.entries(spec)
             .map(([key, value]) => {
-                const hasMultipleSubItems = (Array.isArray(value) && value.length > 1)
-                    || (Array.isArray(value) && value.map((_) => (typeof _ === 'object' ? entries(_).length : 1)).reduce((a, b) => a + b)) > 1
-                    || (typeof value === 'object' && entries(value).length > 1);
+                const hasMultipleSubItems =
+                    (Array.isArray(value) && value.length > 1) ||
+                    (Array.isArray(value) &&
+                        value.map((_) => (typeof _ === 'object' ? Object.entries(_).length : 1)).reduce((a, b) => a + b)) > 1 ||
+                    (typeof value === 'object' && Object.entries(value).length > 1);
                 value = stringify(value);
                 return key + (hasMultipleSubItems ? `[${value}]` : `.${value}`);
             })
