@@ -450,7 +450,7 @@ describe('Flora node client', () => {
             await new FloraClient({
                 url,
                 auth: async (request) => {
-                    const url = URL.parse(request.url);
+                    const url = new URL(request.url);
                     await new Promise((resolve) => process.nextTick(resolve));
                     url.searchParams.append('access_token', '__token__');
                     return Promise.resolve(new Request(url, request));
