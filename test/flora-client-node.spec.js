@@ -6,6 +6,7 @@ import FloraClient from '../src/Client.js';
 describe('Flora node client', () => {
     const url = 'http://api.example.com/';
     const api = new FloraClient({ url });
+    const responseHeaders = { 'Content-Type': 'application/json; charset=utf-8' };
 
     afterEach(() => nock.cleanAll());
     after(() => nock.restore());
@@ -24,7 +25,7 @@ describe('Flora node client', () => {
         const response = { meta: {}, data: {} };
 
         it('should add resource to path', async () => {
-            const req = nock(url).get('/user/').reply(200, response, { 'Content-Type': 'application/json; charset=utf-8' });
+            const req = nock(url).get('/user/').reply(200, response, responseHeaders);
 
             await api.execute({ resource: 'user' });
 
@@ -32,7 +33,7 @@ describe('Flora node client', () => {
         });
 
         it('should add id to path', async () => {
-            const req = nock(url).get('/user/1337').reply(200, response, { 'Content-Type': 'application/json; charset=utf-8' });
+            const req = nock(url).get('/user/1337').reply(200, response, responseHeaders);
 
             await api.execute({ resource: 'user', id: 1337 });
 
@@ -43,7 +44,7 @@ describe('Flora node client', () => {
             const req = nock(url)
                 .get('/user/')
                 .query((queryObj) => !Object.hasOwn(queryObj, 'action'))
-                .reply(200, response, { 'Content-Type': 'application/json; charset=utf-8' });
+                .reply(200, response, responseHeaders);
 
             await api.execute({ resource: 'user', action: 'retrieve' });
 
@@ -51,7 +52,7 @@ describe('Flora node client', () => {
         });
 
         it('should add action parameter', async () => {
-            const req = nock(url).post('/article/1337').query({ action: 'count' }).reply(200, response);
+            const req = nock(url).post('/article/1337').query({ action: 'count' }).reply(200, response, responseHeaders);
 
             await api.execute({ resource: 'article', id: 1337, action: 'count' });
 
@@ -64,8 +65,9 @@ describe('Flora node client', () => {
         }).forEach(([type, select]) => {
             it(`should add select as ${type} parameter to query`, async () => {
                 const req = nock(url)
-                    .get('/user/?select=id%2Clastname%2Caddress.city%2Ccomments(order%3Dts%3Adesc)%5Bid%2Cbody%5D')
-                    .reply(200, response, { 'Content-Type': 'application/json; charset=utf-8' });
+                    .get('/user/')
+                    .query({ select: 'id,lastname,address.city,comments(order=ts:desc)[id,body]' })
+                    .reply(200, response, responseHeaders);
 
                 await api.execute({ resource: 'user', select });
 
@@ -75,8 +77,9 @@ describe('Flora node client', () => {
 
         it('should add filter parameter to query', async () => {
             const req = nock(url)
-                .get('/user/?filter=address%5Bcountry.iso2%3DDE%20AND%20city%3DMunich%5D%20OR%20profession%3DTrader')
-                .reply(200, response, { 'Content-Type': 'application/json; charset=utf-8' });
+                .get('/user/')
+                .query({ filter: 'address[country.iso2=DE AND city=Munich] OR profession=Trader' })
+                .reply(200, response, responseHeaders);
 
             await api.execute({ resource: 'user', filter: 'address[country.iso2=DE AND city=Munich] OR profession=Trader' });
 
@@ -84,9 +87,7 @@ describe('Flora node client', () => {
         });
 
         it('should add order parameter to query', async () => {
-            const req = nock(url)
-                .get('/user/?order=lastname%3Aasc%2Cfirstname%3Adesc')
-                .reply(200, response, { 'Content-Type': 'application/json; charset=utf-8' });
+            const req = nock(url).get('/user/').query({ order: 'lastname:asc,firstname:desc' }).reply(200, response, responseHeaders);
 
             await api.execute({ resource: 'user', order: 'lastname:asc,firstname:desc' });
 
@@ -98,9 +99,7 @@ describe('Flora node client', () => {
             'should add falsy limit parameter to query': 0,
         }).forEach(([description, limit]) => {
             it(description, async () => {
-                const req = nock(url)
-                    .get(`/user/?limit=${limit}`)
-                    .reply(200, response, { 'Content-Type': 'application/json; charset=utf-8' });
+                const req = nock(url).get('/user/').query({ limit }).reply(200, response, responseHeaders);
 
                 await api.execute({ resource: 'user', limit });
 
@@ -109,7 +108,7 @@ describe('Flora node client', () => {
         });
 
         it('should add page parameter to query', async () => {
-            const req = nock(url).get('/user/?page=2').reply(200, response, { 'Content-Type': 'application/json; charset=utf-8' });
+            const req = nock(url).get('/user/').query({ page: 2 }).reply(200, response, responseHeaders);
 
             await api.execute({ resource: 'user', page: 2 });
 
@@ -117,9 +116,7 @@ describe('Flora node client', () => {
         });
 
         it('should add search parameter to query', async () => {
-            const req = nock(url)
-                .get('/user/?search=full%20text%20search')
-                .reply(200, response, { 'Content-Type': 'application/json; charset=utf-8' });
+            const req = nock(url).get('/user/?search=full%20text%20search').reply(200, response, responseHeaders);
 
             await api.execute({ resource: 'user', search: 'full text search' });
 
@@ -127,10 +124,7 @@ describe('Flora node client', () => {
         });
 
         it('should add cache breaker parameter to query', async () => {
-            const req = nock(url)
-                .filteringPath(/_=\d+/, '_=xxx')
-                .get('/user/?_=xxx')
-                .reply(200, response, { 'Content-Type': 'application/json; charset=utf-8' });
+            const req = nock(url).filteringPath(/_=\d+/, '_=xxx').get('/user/').query({ _: 'xxx' }).reply(200, response, responseHeaders);
 
             await api.execute({ resource: 'user', cache: false });
 
@@ -153,8 +147,8 @@ describe('Flora node client', () => {
                 },
             })
                 .post('/article/', '{"title":"Lorem Ipsum","author":{"id":1337}}')
-                .query({ action: 'create' })
-                .reply(200, response, { 'Content-Type': 'application/json; charset=utf-8' });
+                .query((params) => params.action === 'create' && !Object.hasOwn(params, 'data'))
+                .reply(200, response, responseHeaders);
 
             await api.execute(floraReq);
 
@@ -178,7 +172,7 @@ describe('Flora node client', () => {
             })
                 .post('/article/', '{"title":"this is a non-breaking space: ","author":{"id":1337}}')
                 .query({ action: 'create' })
-                .reply(200, response, { 'Content-Type': 'application/json; charset=utf-8' });
+                .reply(200, response, responseHeaders);
 
             await api.execute(floraReq);
 
@@ -187,7 +181,7 @@ describe('Flora node client', () => {
 
         describe('HTTP method', () => {
             it('should use GET for "retrieve" actions', async () => {
-                const req = nock(url).get('/user/1337').reply(200, response, { 'Content-Type': 'application/json; charset=utf-8' });
+                const req = nock(url).get('/user/1337').reply(200, response, responseHeaders);
 
                 await api.execute({ resource: 'user', id: 1337, action: 'retrieve' });
 
@@ -203,10 +197,7 @@ describe('Flora node client', () => {
             });
 
             it('should use POST for other actions than "retrieve"', async () => {
-                const req = nock(url)
-                    .post('/user/1337')
-                    .query({ action: 'lock' })
-                    .reply(200, response, { 'Content-Type': 'application/json; charset=utf-8' });
+                const req = nock(url).post('/user/1337').query({ action: 'lock' }).reply(200, response, responseHeaders);
 
                 await api.execute({ resource: 'user', id: 1337, action: 'lock' });
 
@@ -214,16 +205,22 @@ describe('Flora node client', () => {
             });
 
             it('should explicitly overwrite HTTP method by parameter', async () => {
-                const req = nock(url)
-                    .get('/user/')
-                    .query({ action: 'search', customParameter: 1 })
-                    .reply(200, response, { 'Content-Type': 'application/json; charset=utf-8' });
+                const req = nock(url, {
+                    reqheaders: {
+                        'content-type': 'application/json; charset=utf-8',
+                        'content-length': 16,
+                    },
+                })
+                    .patch('/article/1337', { title: 'test' })
+                    .query({ action: 'update' })
+                    .reply(200, response, responseHeaders);
 
                 await api.execute({
-                    resource: 'user',
-                    action: 'search',
-                    customParameter: 1,
-                    httpMethod: 'GET',
+                    resource: 'article',
+                    id: 1337,
+                    action: 'update',
+                    data: { title: 'test' },
+                    httpMethod: 'PATCH',
                 });
 
                 assert.ok(req.isDone());
@@ -252,6 +249,14 @@ describe('Flora node client', () => {
                             searchParams.get('page') === '10'
                         );
                     })
+                    .query(
+                        (params) =>
+                            !Object.hasOwn(params, 'select') &&
+                            !Object.hasOwn(params, 'filter') &&
+                            !Object.hasOwn(params, 'search') &&
+                            !Object.hasOwn(params, 'limit') &&
+                            !Object.hasOwn(params, 'page'),
+                    )
                     .reply(200, response);
 
                 await api.execute(floraReq);
@@ -263,7 +268,7 @@ describe('Flora node client', () => {
 
     describe('parameters', () => {
         it('should support default parameters', async () => {
-            const req = nock(url).get('/user/1337?param=abc').reply(200, {}, { 'Content-Type': 'application/json; charset=utf-8' });
+            const req = nock(url).get('/user/1337').query({ param: 'abc' }).reply(200, {}, responseHeaders);
 
             await new FloraClient({ url, defaultParams: { param: 'abc' } }).execute({ resource: 'user', id: 1337 });
 
@@ -271,7 +276,7 @@ describe('Flora node client', () => {
         });
 
         it('should use request parameter if default exists with same name', async () => {
-            const req = nock(url).get('/user/1337?param=xyz').reply(200, {}, { 'Content-Type': 'application/json; charset=utf-8' });
+            const req = nock(url).get('/user/1337').query({ param: 'xyz' }).reply(200, {}, responseHeaders);
 
             await new FloraClient({ url, defaultParams: { param: 'abc' } }).execute({ resource: 'user', id: 1337, param: 'xyz' });
 
@@ -289,22 +294,19 @@ describe('Flora node client', () => {
             };
             const req = nock(url)
                 .post('/article/', '{"title":"Lorem Ipsum","author":{"id":1337}}')
-                .query({
-                    client_id: 1,
-                    action: 'create',
-                })
-                .reply(200, {}, { 'Content-Type': 'application/json; charset=utf-8' });
+                .query((params) => params.client_id === 'test' && params.action === 'create' && !Object.hasOwn(params, 'data'))
+                .reply(200, {}, responseHeaders);
 
-            await new FloraClient({ url, defaultParams: { client_id: 1 }, forceGetParams: ['client_id'] }).execute(floraReq);
+            await new FloraClient({ url, defaultParams: { client_id: 'test' }, forceGetParams: ['client_id'] }).execute(floraReq);
 
             assert.ok(req.isDone());
         });
 
         it('should not add httpHeaders option to request params', async () => {
-            const req = nock(url)
+            const req = nock(url, { reqheaders: { 'x-awesome': 'test' } })
                 .get('/user/')
-                .query((queryObj) => !Object.hasOwn(queryObj, 'httpHeaders'))
-                .reply(200, { meta: {}, data: [] }, { 'Content-Type': 'application/json; charset=utf-8' });
+                .query((params) => !Object.hasOwn(params, 'httpHeaders'))
+                .reply(200, { meta: {}, data: [] }, responseHeaders);
 
             await api.execute({ resource: 'user', httpHeaders: { 'X-Awesome': 'test' } });
 
@@ -332,7 +334,7 @@ describe('Flora node client', () => {
     describe('response', () => {
         it('should resolve API response', async () => {
             const data = [{ id: 1337, firstname: 'John', lastname: 'Doe' }];
-            const req = nock(url).get('/user/').reply(200, { meta: {}, data }, { 'Content-Type': 'application/json; charset=utf-8' });
+            const req = nock(url).get('/user/').reply(200, { meta: {}, data }, responseHeaders);
 
             const response = await api.execute({ resource: 'user' });
 
@@ -350,7 +352,7 @@ describe('Flora node client', () => {
                     data: null,
                     error: { message },
                 },
-                { 'Content-Type': 'application/json; charset=utf-8' },
+                responseHeaders,
             );
 
             await assert.rejects(() => api.execute({ resource: 'user' }), { name: 'Error', message });
@@ -378,7 +380,7 @@ describe('Flora node client', () => {
                             },
                         },
                     },
-                    { 'Content-Type': 'application/json; charset=utf-8' },
+                    responseHeaders,
                 );
 
             await assert.rejects(
@@ -402,7 +404,7 @@ describe('Flora node client', () => {
         });
 
         it('should trigger an error if JSON cannot be parsed', async () => {
-            const req = nock(url).get('/user/').reply(200, '["test": 123]', { 'Content-Type': 'application/json; charset=utf-8' });
+            const req = nock(url).get('/user/').reply(200, '["test": 123]', responseHeaders);
 
             await assert.rejects(() => api.execute({ resource: 'user' }), { name: 'SyntaxError' });
             assert.ok(req.isDone());
@@ -423,7 +425,7 @@ describe('Flora node client', () => {
         it('should call handler function if authentication option is enabled', async () => {
             const req = nock(url, { reqheaders: { Authorization: 'Bearer __token__' } })
                 .post('/user/1337')
-                .reply(200, { meta: {}, data: [] }, { 'Content-Type': 'application/json; charset=utf-8' });
+                .reply(200, { meta: {}, data: [] }, responseHeaders);
 
             await new FloraClient({
                 url,
@@ -443,7 +445,7 @@ describe('Flora node client', () => {
                     action: 'update',
                     access_token: '__token__',
                 })
-                .reply(200, { meta: {}, data: [] }, { 'Content-Type': 'application/json; charset=utf-8' });
+                .reply(200, { meta: {}, data: [] }, responseHeaders);
 
             await new FloraClient({
                 url,
@@ -472,13 +474,19 @@ describe('Flora node client', () => {
         });
 
         it('should not add authenticate option as request parameter', async () => {
-            const auth = (floraRequest) => Promise.resolve(floraRequest);
-            const req = nock(url)
+            const req = nock(url, { reqheaders: { authorization: 'Bearer __token__' } })
                 .get('/user/')
-                .query((queryObj) => !Object.hasOwn(queryObj, 'auth'))
-                .reply(200, { meta: {}, data: [] }, { 'Content-Type': 'application/json; charset=utf-8' });
+                .query((params) => !Object.hasOwn(params, 'auth'))
+                .reply(200, { meta: {}, data: [] }, responseHeaders);
 
-            await new FloraClient({ url, auth }).execute({ resource: 'user', auth: true });
+            await new FloraClient({
+                url,
+                auth: async (request) => {
+                    await new Promise((resolve) => process.nextTick(resolve));
+                    request.headers.set('Authorization', 'Bearer __token__');
+                    return request;
+                },
+            }).execute({ resource: 'user', auth: true });
 
             assert.ok(req.isDone());
         });
@@ -489,7 +497,7 @@ describe('Flora node client', () => {
             const req = nock(url)
                 .matchHeader('Referer', /^file:\/\/\/.*/)
                 .get('/user/')
-                .reply(200, {}, { 'Content-Type': 'application/json; charset=utf-8' });
+                .reply(200, {}, responseHeaders);
 
             await api.execute({ resource: 'user' });
 
@@ -500,7 +508,7 @@ describe('Flora node client', () => {
     it('should use timeout setting', async (ctx) => {
         ctx.after(() => nock.abortPendingRequests());
 
-        const req = nock(url).get('/user/').delay(500).reply(200, {}, { 'Content-Type': 'application/json; charset=utf-8' });
+        const req = nock(url).get('/user/').delay(500).reply(200, {}, responseHeaders);
 
         await assert.rejects(
             () => new FloraClient({ url, timeout: 250 }).execute({ resource: 'user' }),

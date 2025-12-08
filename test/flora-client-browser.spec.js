@@ -158,7 +158,6 @@ test.describe('FloraClient', () => {
                 });
 
                 const url = new URL(request.url());
-                expect(url.searchParams.has('action')).toBe(true);
                 expect(url.searchParams.get('action')).toEqual('count');
             });
 
@@ -180,8 +179,6 @@ test.describe('FloraClient', () => {
                     executeArgs: { resource: 'article', action: 'count', id: 1337 },
                 });
 
-                const headers = request.headers();
-
                 expect(request.method()).toEqual('POST');
                 expect(request.postData()).toBeNull();
             });
@@ -200,7 +197,6 @@ test.describe('FloraClient', () => {
                 });
 
                 const url = new URL(request.url());
-                expect(url.searchParams.has('select')).toBe(true);
                 expect(url.searchParams.get('select')).toEqual('id,title,date');
             }),
         );
@@ -272,12 +268,14 @@ test.describe('FloraClient', () => {
                 },
             });
 
-            const headers = request.headers();
-
             expect(request.method()).toEqual('POST');
-            expect(headers).toHaveProperty('content-type');
-            expect(headers['content-type'].toLowerCase()).toEqual('application/json; charset=utf-8');
+
+            const headers = request.headers();
+            expect(headers).toHaveProperty('content-type', 'application/json; charset=utf-8');
             expect(request.postData()).toEqual('{"title":"Lorem Ipsum","author":{"id":1337}}');
+
+            const url = new URL(request.url());
+            expect(url.searchParams.has('data')).toBe(false);
         });
 
         test('should add default parameter(s)', async ({ page }) => {
@@ -298,7 +296,7 @@ test.describe('FloraClient', () => {
             });
 
             const url = new URL(request.url());
-            expect(url.searchParams.has('foo')).toEqual(true);
+            expect(url.searchParams.has('foo')).toBe(true);
             expect(url.searchParams.get('foo')).toEqual('bar');
         });
 
@@ -317,8 +315,9 @@ test.describe('FloraClient', () => {
             });
 
             const url = new URL(request.url());
-            expect(url.searchParams.has('foobar')).toEqual(true);
-            expect(url.searchParams.get('foobar')).toEqual('1');
+            expect(url.searchParams.has('foobar')).toBe(true);
+            expect(url.searchParams.get('foobar')).toBe('1');
+            expect(url.searchParams.has('data')).toBe(false);
         });
 
         test.describe('HTTP methods', () => {
@@ -327,11 +326,14 @@ test.describe('FloraClient', () => {
                     executeArgs: { resource: 'article', action: 'update', data: { title: 'Updated title' }, httpMethod: 'PATCH' },
                 });
 
-                const url = new URL(request.url());
-
                 expect(request.method()).toEqual('PATCH');
+
+                const url = new URL(request.url());
                 expect(url.searchParams.get('action')).toEqual('update');
                 expect(url.searchParams.has('httpMethod')).toBe(false);
+                expect(url.searchParams.has('data')).toBe(false);
+
+                expect(request.postData()).toEqual('{"title":"Updated title"}');
             });
 
             test('should switch to POST if querystring is too large', async ({ page }) => {
@@ -352,10 +354,14 @@ test.describe('FloraClient', () => {
                 const url = new URL(request.url());
                 expect(request.method()).toEqual('POST');
                 expect(url.pathname).toEqual('/api/article/');
+                expect(url.searchParams.has('select')).toBe(false);
+                expect(url.searchParams.has('filter')).toBe(false);
+                expect(url.searchParams.has('search')).toBe(false);
+                expect(url.searchParams.has('limit')).toBe(false);
+                expect(url.searchParams.has('page')).toBe(false);
 
                 const headers = request.headers();
-                expect(headers).toHaveProperty('content-type');
-                expect(headers['content-type']).toEqual('application/x-www-form-urlencoded');
+                expect(headers).toHaveProperty('content-type', 'application/x-www-form-urlencoded');
 
                 const searchParams = new URLSearchParams(request.postData());
                 expect(searchParams.get('select')).toEqual(select);
@@ -394,8 +400,7 @@ test.describe('FloraClient', () => {
                 expect(url.searchParams.has('auth')).toBe(false);
 
                 const headers = request.headers();
-                expect(headers).toHaveProperty('authorization');
-                expect(headers['authorization']).toEqual('Bearer __token__');
+                expect(headers).toHaveProperty('authorization', 'Bearer __token__');
             });
         });
 
@@ -405,11 +410,10 @@ test.describe('FloraClient', () => {
             });
 
             const headers = request.headers();
-            expect(headers).toHaveProperty('x-foo');
-            expect(headers['x-foo']).toEqual('bar');
+            expect(headers).toHaveProperty('x-foo', 'bar');
 
             const url = new URL(request.url());
-            expect(url.searchParams).not.toHaveProperty('httpHeaders');
+            expect(url.searchParams.has('httpHeaders')).toBe(false);
         });
 
         test.describe('responses', () => {
@@ -419,8 +423,7 @@ test.describe('FloraClient', () => {
                     response: { json: { data: [{ title: 'Awesome title' }] } },
                 });
 
-                expect(result).toHaveProperty('data');
-                expect(result.data).toEqual([{ title: 'Awesome title' }]);
+                expect(result).toHaveProperty('data', [{ title: 'Awesome title' }]);
             });
 
             test('test non-JSON content-types', async ({ page }) => {
