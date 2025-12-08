@@ -146,7 +146,7 @@ class Client {
 
         if (contentType) headers.set('Content-Type', contentType);
         if (body) headers.set('Content-Length', String(new Blob([body]).size));
-        if (searchParams.size) searchParams.entries().forEach(([key, value]) => url.searchParams.set(key, value));
+        if (searchParams.size) Array.from(searchParams.entries()).forEach(([key, value]) => url.searchParams.set(key, value));
 
         method = hasOwn(floraRequest, 'httpMethod') ? floraRequest.httpMethod : method;
         // add cache breaker to bypass HTTP caching
