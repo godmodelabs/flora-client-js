@@ -26,7 +26,7 @@ async function startHttpServer() {
         const data = JSON.stringify({ data: [] });
         if (url.pathname.startsWith('/timeout')) {
             const delay = parseInt(url.searchParams.get('delay'), 10);
-            setTimeout(() => {
+            globalThis.setTimeout(() => {
                 res.setHeader('Content-Type', 'application/json');
                 res.end(data);
             }, delay || 500);
@@ -386,7 +386,7 @@ test.describe('FloraClient', () => {
                 // functions cannot be serialized => add global function as workaround
                 await page.evaluate(() => {
                     window.authTestHandler = async (request) => {
-                        await new Promise((resolve) => setTimeout(resolve, 10));
+                        await new Promise((resolve) => globalThis.setTimeout(resolve, 10));
                         request.headers.set('Authorization', 'Bearer __token__');
                         return request;
                     };
@@ -432,8 +432,6 @@ test.describe('FloraClient', () => {
                 await page.route(match, async (route) => {
                     try {
                         await route.fulfill({ status: 500, contentType: 'text/html', body: '500 Internal Server Error' });
-                    } catch (err) {
-                        reject(err);
                     } finally {
                         await page.unroute(match);
                     }
@@ -453,8 +451,6 @@ test.describe('FloraClient', () => {
                 await page.route(match, async (route) => {
                     try {
                         await route.fulfill({ contentType: 'application/json', body: '{' });
-                    } catch (err) {
-                        reject(err);
                     } finally {
                         await page.unroute(match);
                     }

@@ -1,5 +1,4 @@
 dist/
-mocha.json
 node_modules/
 npm-debug.log
 test-results/

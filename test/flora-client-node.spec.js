@@ -451,7 +451,7 @@ describe('Flora node client', () => {
                 url,
                 auth: async (request) => {
                     const url = new URL(request.url);
-                    await new Promise((resolve) => process.nextTick(resolve));
+                    await new Promise((resolve) => globalThis.process.nextTick(resolve));
                     url.searchParams.append('access_token', '__token__');
                     return Promise.resolve(new Request(url, request));
                 },
@@ -482,7 +482,7 @@ describe('Flora node client', () => {
             await new FloraClient({
                 url,
                 auth: async (request) => {
-                    await new Promise((resolve) => process.nextTick(resolve));
+                    await new Promise((resolve) => globalThis.process.nextTick(resolve));
                     request.headers.set('Authorization', 'Bearer __token__');
                     return request;
                 },

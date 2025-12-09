@@ -1,6 +1,6 @@
 import { defineConfig, devices } from '@playwright/test';
 
-const webkitExec = process.platform === 'linux' ? process.env.PLAYWRIGHT_WEBKIT_EXECUTABLE_PATH : undefined;
+const webkitExec = globalThis.process.platform === 'linux' ? globalThis.process.env.PLAYWRIGHT_WEBKIT_EXECUTABLE_PATH : undefined;
 
 export default defineConfig({
     use: { headless: true },
@@ -11,7 +11,7 @@ export default defineConfig({
             name: 'webkit',
             use: {
                 ...devices['Desktop Safari'],
-                ...(webkitExec && { launchOptions: { executablePath: process.env.PLAYWRIGHT_WEBKIT_EXECUTABLE_PATH } }),
+                ...(webkitExec && { launchOptions: { executablePath: globalThis.process.env.PLAYWRIGHT_WEBKIT_EXECUTABLE_PATH } }),
             },
         },
     ],

@@ -12,10 +12,8 @@ function isValidRequestId(id) {
     const type = typeof id;
 
     if (type === 'number') {
-        // eslint-disable-next-line no-restricted-globals
-        if (isNaN(id)) return false;
-        // eslint-disable-next-line no-restricted-globals
-        if (!isFinite(id)) return false;
+        if (Number.isNaN(id)) return false;
+        if (!Number.isFinite(id)) return false;
     }
 
     return type === 'string' || type === 'number';
@@ -107,7 +105,7 @@ class Client {
     _prepare(floraRequest) {
         const url = new URL(this.url);
         const headers = new Headers({
-            ...(globalThis.process ? { referer: new URL('file://' + process.argv[1] + '/').href } : null),
+            ...(globalThis.process ? { referer: new URL('file://' + globalThis.process.argv[1] + '/').href } : null),
             ...(floraRequest.httpHeaders && !isEmpty(floraRequest.httpHeaders) ? floraRequest.httpHeaders : null),
         });
         let searchParams = new URLSearchParams();
