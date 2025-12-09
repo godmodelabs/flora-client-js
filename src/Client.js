@@ -52,12 +52,9 @@ class Client {
                 }, {});
         }
 
-        this.forceGetParams = ['client_id', 'action', 'access_token'];
-        if (Array.isArray(options.forceGetParams) && options.forceGetParams.length) {
-            options.forceGetParams
-                .filter((param) => this.forceGetParams.indexOf(param) === -1)
-                .forEach((param) => this.forceGetParams.push(param));
-        }
+        this.forceGetParams = [
+            ...new Set(['client_id', 'action', 'access_token', ...(Array.isArray(options.forceGetParams) ? options.forceGetParams : [])]),
+        ];
 
         if (typeof options.auth === 'function') {
             this.auth = options.auth;
