@@ -43,14 +43,7 @@ class Client {
          */
         this.url = options.url.substr(-1) === '/' ? options.url : options.url + '/';
 
-        if (options.defaultParams && !isEmpty(options.defaultParams)) {
-            this.defaultParams = Object.keys(options.defaultParams)
-                .filter((key) => hasOwn(options.defaultParams, key))
-                .reduce((acc, key) => {
-                    acc[key] = options.defaultParams[key];
-                    return acc;
-                }, {});
-        }
+        this.defaultParams = !isEmpty(options?.defaultParams) ? options.defaultParams : {};
 
         this.forceGetParams = [
             ...new Set(['client_id', 'action', 'access_token', ...(Array.isArray(options.forceGetParams) ? options.forceGetParams : [])]),
