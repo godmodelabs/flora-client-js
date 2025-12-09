@@ -44,17 +44,17 @@
   "license": "MIT",
   "type": "module",
   "devDependencies": {
-    "@playwright/browser-chromium": "1.52.0",
-    "@playwright/browser-firefox": "1.52.0",
-    "@playwright/browser-webkit": "1.52.0",
-    "@playwright/test": "1.52.0",
+    "@playwright/browser-chromium": "1.54.1",
+    "@playwright/browser-firefox": "1.54.1",
+    "@playwright/browser-webkit": "1.54.1",
+    "@playwright/test": "1.54.1",
     "@rollup/plugin-commonjs": "^29.0.0",
     "@rollup/plugin-node-resolve": "^16.0.3",
     "eslint": "^8.53.0",
     "eslint-config-airbnb-base": "^15.0.0",
     "eslint-plugin-import": "^2.29.0",
     "nock": "^14.0.10",
-    "playwright": "1.52.0",
+    "playwright": "1.54.1",
     "prettier": "^3.0.3",
     "rollup": "^4.53.3"
   }
