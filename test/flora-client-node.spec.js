@@ -510,10 +510,28 @@ describe('Flora node client', () => {
 
         const req = nock(url).get('/user/').delay(500).reply(200, {}, responseHeaders);
 
+        await assert.rejects(() => new FloraClient({ url, timeout: 250 }).execute({ resource: 'user' }), { name: 'TimeoutError' });
+        assert.ok(req.isDone());
+    });
+
+    it('should abort requests using signals', async (ctx) => {
+        ctx.after(() => nock.abortPendingRequests());
+
+        const req = nock(url)
+            .get('/user/')
+            .query((params) => !Object.hasOwn(params, 'signal'))
+            .delay(500)
+            .reply(200, {}, responseHeaders);
+
         await assert.rejects(
-            () => new FloraClient({ url, timeout: 250 }).execute({ resource: 'user' }),
-            (err) => err.name === 'TimeoutError',
+            () => {
+                const controller = new AbortController();
+                process.nextTick(() => controller.abort());
+                return new FloraClient({ url }).execute({ resource: 'user', signal: controller.signal });
+            },
+            { name: 'AbortError' },
         );
+
         assert.ok(req.isDone());
     });
 

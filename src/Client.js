@@ -49,9 +49,8 @@ class Client {
             ...new Set(['client_id', 'action', 'access_token', ...(Array.isArray(options.forceGetParams) ? options.forceGetParams : [])]),
         ];
 
-        if (typeof options.auth === 'function') {
-            this.auth = options.auth;
-        }
+        this.auth =
+            typeof options.auth === 'function' ? options.auth : () => Promise.reject(new Error('Auth requests require an auth handler'));
 
         this.timeout = options.timeout || 15000;
     }
@@ -74,7 +73,8 @@ class Client {
      * @param {boolean=}[floraRequest.cache=true]        - Use HTTP caching
      * @param {string=} floraRequest.httpMethod          - Explicitly overwrite HTTP method
      * @param {Object=} floraRequest.httpHeaders         - Additional HTTP headers
-     * @param {boolean=} [floraRequest.authenticate=false]- Use the authentication handler for floraRequest
+     * @param {AbortSignal=} floraRequest.signal         - Abort request using signal
+     * @param {boolean=} [floraRequest.auth=false]       - Use the authentication handler for floraRequest
      * @return {Promise}
      */
     execute(floraRequest) {
@@ -87,9 +87,9 @@ class Client {
         }
 
         const request = this._prepare(floraRequest);
-        if (!floraRequest.auth) return this._request(request);
-        if (!this.auth) return Promise.reject(new Error('Auth requests require an auth handler'));
-        return this.auth(request).then(this._request.bind(this));
+        return (floraRequest.auth ? this.auth(request) : Promise.resolve(request)).then((request) =>
+            this._request(request, floraRequest.signal),
+        );
     }
 
     _prepare(floraRequest) {
@@ -106,7 +106,7 @@ class Client {
         if (typeof floraRequest.select === 'object') floraRequest.select = stringify(floraRequest.select);
 
         for (const [param, value] of Object.entries({ ...this.defaultParams, ...floraRequest })) {
-            if (['resource', 'id', 'data', 'cache', 'auth', 'httpMethod', 'httpHeaders'].includes(param)) {
+            if (['resource', 'id', 'data', 'cache', 'auth', 'httpMethod', 'httpHeaders', 'signal'].includes(param)) {
                 continue;
             }
 
@@ -145,8 +145,8 @@ class Client {
         return new Request(url, { method, headers, body });
     }
 
-    async _request(request) {
-        const response = await fetch(request, { signal: AbortSignal.timeout(this.timeout) });
+    async _request(request, signal = AbortSignal.timeout(this.timeout)) {
+        const response = await fetch(request, { signal });
 
         const contentType = response.headers.get('content-type');
         if (!contentType?.startsWith('application/json')) {

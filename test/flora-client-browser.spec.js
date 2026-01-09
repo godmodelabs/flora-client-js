@@ -483,5 +483,35 @@ test.describe('FloraClient', () => {
 
             await expect(call).rejects.toThrow(/(?:Timeout|Abort)Error|The operation timed out/);
         });
+
+        test('should abort requests using signals', async ({ page }) => {
+            const failedReqPromise = page.waitForEvent('requestfailed', (req) => URL.parse(req.url())?.pathname.startsWith('/timeout'));
+            const call = page.evaluate((url) => {
+                const controller = new AbortController();
+                const client = new window.FloraClient({
+                    url,
+                    auth: (request) =>
+                        new Promise((resolve) =>
+                            setTimeout(() => {
+                                request.headers.set('Authorization', 'Bearer __token__');
+                                resolve(request);
+                            }, 1),
+                        ),
+                });
+                setTimeout(() => controller.abort(), 100);
+                return client.execute({ resource: 'timeout', auth: true, signal: controller.signal });
+            }, httpServer.url);
+
+            await expect(call).rejects.toThrow(/AbortError|operation was aborted/);
+
+            const failedRequest = await failedReqPromise;
+            expect(failedRequest.headers()).toEqual(expect.objectContaining({ authorization: 'Bearer __token__' }));
+
+            const url = URL.parse(failedRequest?.url());
+            expect(url).not.toBeNull();
+            expect(url.searchParams.has('signal')).toBeFalsy();
+
+            expect(failedRequest.failure()?.errorText).toMatch(/net::ERR_ABORTED|NS_BINDING_ABORTED|request cancelled/);
+        });
     });
 });
